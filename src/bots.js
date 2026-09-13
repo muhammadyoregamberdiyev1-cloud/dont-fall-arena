@@ -115,8 +115,10 @@ export function planBot(p, arena, world, rng) {
 
   if (!best) {
     const any = arena.list.filter((t) => t.state === TILE.SOLID);
-    best = any.length ? any[Math.floor(rng() * any.length)] : here;
+    best =
+      any.length ? any[Math.floor(rng() * any.length)] : here || arena.list.find((t) => t.state !== TILE.GONE) || arena.list[0];
   }
+  if (!best) return;
 
   ai.target = best;
   ai.targetX = best.x + (rng() - 0.5) * arena.size * 0.4;

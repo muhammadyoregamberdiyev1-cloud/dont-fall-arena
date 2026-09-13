@@ -69,6 +69,35 @@ export class Renderer {
     return base;
   }
 
+  /** Hex or rounded-square outline depending on the arena definition. */
+  cellPath(ctx, arena, x, y, r) {
+    if (arena.gridType === 'square') {
+      const w = r * 1.84;
+      const rad = r * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2 + rad, y - w / 2);
+      ctx.arcTo(x + w / 2, y - w / 2, x + w / 2, y + w / 2, rad);
+      ctx.arcTo(x + w / 2, y + w / 2, x - w / 2, y + w / 2, rad);
+      ctx.arcTo(x - w / 2, y + w / 2, x - w / 2, y - w / 2, rad);
+      ctx.arcTo(x - w / 2, y - w / 2, x + w / 2, y - w / 2, rad);
+      ctx.closePath();
+      return;
+    }
+    this.hexPath(ctx, x, y, r);
+  }
+
+  /** Bright arcade palette for Arena #1; specials keep their identity. */
+  squareColors(t, arena, match) {
+    const pal = arena.def.palette || ['#ff5d73', '#ffb03a', '#ffe14d', '#5dffa8', '#4dd0ff', '#b47cff'];
+    let top = pal[t.ci % pal.length];
+    if (t.mat === MAT.STEEL) top = '#9fb4d8';
+    else if (t.mat === MAT.ICE) top = '#bfeaff';
+    else if (t.mat === MAT.CRUMBLE) top = '#d8a06a';
+    if (match && match.blackoutT > 0) top = '#2a3350';
+    const side = mix(top, 0, 0.45);
+    return { top, topAlt: mix(top, 255, 0.14), side, edge: mix(top, 255, 0.4), crackTime: MATERIALS[t.mat].crackTime, fallTime: MATERIALS[t.mat].fallTime };
+  }
+
   corners(size) {
     if (!this.cornerCache.has(size)) this.cornerCache.set(size, hexCorners(size));
     return this.cornerCache.get(size);
@@ -283,9 +312,8 @@ export class Renderer {
 
     // --- camera -----------------------------------------------------------
     const focus = opts.focus;
-    const zoomRing = clamp(arena.maxRing + 1.15, 3, arena.radius + 1.15);
-    const worldW = arena.size * Math.sqrt(3) * zoomRing * 2;
-    const worldH = arena.size * 1.5 * zoomRing * 2 + ARENA.depth * 3;
+    const worldW = arena.viewW;
+    const worldH = arena.viewH;
     const pad = Math.min(this.w, this.h) < 620 ? 1.04 : 1.08;
     this.cam.targetScale = Math.min(this.w / (worldW * pad), this.h / (worldH * pad));
     this.cam.punch = Math.max(0, (this.cam.punch || 0) - dt * 0.35);
@@ -330,10 +358,11 @@ export class Renderer {
   }
 
   drawBackground(ctx, arena, match) {
+    const th = (arena.def && arena.def.theme) || { bg0: '#141b33', bg1: '#0b1024', bg2: '#04060f' };
     const g = ctx.createRadialGradient(this.w / 2, this.h * 0.45, 0, this.w / 2, this.h * 0.5, Math.max(this.w, this.h) * 0.78);
-    g.addColorStop(0, '#141b33');
-    g.addColorStop(0.55, '#0b1024');
-    g.addColorStop(1, '#04060f');
+    g.addColorStop(0, th.bg0);
+    g.addColorStop(0.55, th.bg1);
+    g.addColorStop(1, th.bg2 || '#04060f');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.w, this.h);
 
@@ -365,6 +394,14 @@ export class Renderer {
       ctx.fillStyle = `rgba(255,140,80,${arena.quakeFlash * 0.08})`;
       ctx.fillRect(0, 0, this.w, this.h);
     }
+    if (match && match.darkT > 0) {
+      const a = 0.55 * clamp(match.darkT / 2, 0, 1);
+      const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.12, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.6);
+      vg.addColorStop(0, 'rgba(2,4,10,0)');
+      vg.addColorStop(1, `rgba(2,4,10,${a})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
   }
 
   drawArena(ctx, arena, match) {
@@ -382,10 +419,10 @@ export class Renderer {
       g.addColorStop(0.75, 'rgba(6,10,24,0.55)');
       g.addColorStop(1, 'rgba(6,10,24,0)');
       ctx.fillStyle = g;
-      this.hexPath(ctx, t.x, t.y, size * 0.98);
+      this.cellPath(ctx, arena, t.x, t.y, size * 0.98);
       ctx.fill();
       ctx.strokeStyle = 'rgba(120,170,255,0.14)';
-      this.hexPath(ctx, t.x, t.y, size * 0.94);
+      this.cellPath(ctx, arena, t.x, t.y, size * 0.94);
       ctx.stroke();
     }
     ctx.restore();
@@ -396,10 +433,13 @@ export class Renderer {
       ctx.save();
       ctx.lineWidth = 3;
       ctx.strokeStyle = `rgba(255,80,110,${0.25 + pulse * 0.55 * arena.collapseWarn})`;
-      for (const c of hexRing(arena.maxRing)) {
-        const t = arena.get(c.q, c.r);
+      const rim =
+        arena.gridType === 'square'
+          ? arena.list.filter((x) => x.d === arena.maxRing)
+          : hexRing(arena.maxRing).map((c) => arena.get(c.q, c.r)).filter(Boolean);
+      for (const t of rim) {
         if (!t || t.state === TILE.GONE) continue;
-        this.hexPath(ctx, t.x, t.y, size * 0.97);
+        this.cellPath(ctx, arena, t.x, t.y, size * 0.97);
         ctx.stroke();
       }
       ctx.restore();
@@ -411,12 +451,48 @@ export class Renderer {
       if (t.state === TILE.GONE) continue;
       const k = clamp(this.roundAnim * 2.4 - t.d * 0.13, 0, 1);
       if (k <= 0.001) continue;
-      this.drawTile(ctx, t, size, depth, arena, k);
+      this.drawTile(ctx, t, size, depth, arena, k, match);
+    }
+
+    // --- live hazard dressing (events) -------------------------------------
+    if (match) {
+      if (match.lavaT > 0) {
+        ctx.save();
+        ctx.rotate(match.lavaAngle);
+        const lg = ctx.createLinearGradient(0, -arena.size, 0, arena.size);
+        lg.addColorStop(0, 'rgba(255,90,40,0)');
+        lg.addColorStop(0.5, `rgba(255,110,40,${0.35 * clamp(match.lavaT / 2, 0, 1)})`);
+        lg.addColorStop(1, 'rgba(255,90,40,0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(-arena.worldRadius, -arena.size * 0.6, arena.worldRadius * 2, arena.size * 1.2);
+        ctx.restore();
+      }
+      if (match.tornado) {
+        const tn = match.tornado;
+        ctx.save();
+        ctx.translate(tn.x, tn.y);
+        for (let i = 0; i < 4; i++) {
+          ctx.rotate(tn.a + i * 1.57);
+          ctx.strokeStyle = `rgba(190,230,255,${0.35 - i * 0.07})`;
+          ctx.lineWidth = 5 - i;
+          ctx.beginPath();
+          ctx.arc(0, 0, 60 + i * 46, 0, 2.2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (match.iceT > 0) {
+        ctx.fillStyle = `rgba(120,220,255,${0.08 * clamp(match.iceT / 2, 0, 1)})`;
+        ctx.fillRect(-arena.worldRadius, -arena.worldRadius, arena.worldRadius * 2, arena.worldRadius * 2);
+      }
     }
   }
 
-  drawTile(ctx, t, size, depth, arena, spawn = 1) {
-    const mat = this.tileColors(t);
+  drawTile(ctx, t, size, depth, arena, spawn = 1, match = null) {
+    const square = arena.gridType === 'square';
+    const tiny = match && match.modifier === 'tinyTiles' ? 0.86 : 1;
+    size *= tiny;
+    const mat = square ? this.squareColors(t, arena, match) : this.tileColors(t);
     const wob = Math.sin(t.wobbleT) * t.wobble * 2.2;
     let scale = spawn < 1 ? easeOutBack(spawn) : 1;
     let drop = spawn < 1 ? (1 - spawn) * size * 1.4 : 0;
@@ -440,7 +516,7 @@ export class Renderer {
 
     // side / extrusion
     ctx.fillStyle = mat.side;
-    this.hexPath(ctx, cx, cy + depth * scale, size * 0.98 * scale);
+    this.cellPath(ctx, arena, cx, cy + depth * scale, size * 0.98 * scale);
     ctx.fill();
 
     // top face (slight per-tile tint keeps the floor from looking flat)
@@ -449,12 +525,12 @@ export class Renderer {
     grd.addColorStop(0, mix(mat.top, 255, Math.max(0, tint)) || mat.top);
     grd.addColorStop(1, mix(mat.topAlt, 0, Math.max(0, -tint)) || mat.topAlt);
     ctx.fillStyle = grd;
-    this.hexPath(ctx, cx, cy, size * 0.96 * scale);
+    this.cellPath(ctx, arena, cx, cy, size * 0.96 * scale);
     ctx.fill();
 
     // material detail
     ctx.save();
-    this.hexPath(ctx, cx, cy, size * 0.96 * scale);
+    this.cellPath(ctx, arena, cx, cy, size * 0.96 * scale);
     ctx.clip();
     if (t.mat === MAT.ICE) {
       ctx.strokeStyle = 'rgba(255,255,255,0.4)';

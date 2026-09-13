@@ -214,6 +214,7 @@ export function buildGuestView(cfg, roster, mySlot) {
       isLocal: r.slot === mySlot,
     });
     p.netSlot = r.slot;
+    p.team = cfg && cfg.mode && cfg.mode !== 'solo' ? (r.team ?? 0) : null;
     p.wins = 0;
     p.points = 0;
     return p;
@@ -435,6 +436,11 @@ export class Net {
     this.role = null; // 'host' | 'guest'
     this.chat = [];
     this.error = null;
+    this.token = null;
+    this.queue = null;         // {mode, ranked, allowBots}
+    this.vote = null;          // {arenas, secs, endsAt, counts, myVote, bots}
+    this.party = null;
+    this.rewards = null;
     this.handlers = {};
     this.host = new NetHost(this);
     this.guest = new NetGuest(this);
@@ -459,9 +465,11 @@ export class Net {
     return this.roster.length - 1;
   }
 
-  connect(name) {
+  connect(name, pid) {
     if (this.connected || this.state === NET_STATE.CONNECTING) return;
     this.name = name || this.name;
+    this.pid = pid || this.pid || '';
+    this.reconnectToken = this.loadToken();
     this.error = null;
     this.gotWelcome = false;
     this.candidates = wsUrls();
@@ -488,7 +496,13 @@ export class Net {
       return;
     }
     this.ws = ws;
-    ws.onopen = () => this.send({ t: 'hello', name: this.name });
+    ws.onopen = () =>
+      this.send({
+        t: 'hello',
+        name: this.name,
+        pid: this.pid || '',
+        token: this.state === NET_STATE.CONNECTING && this.reconnectToken ? this.reconnectToken : '',
+      });
     ws.onmessage = (e) => {
       let msg;
       try {
@@ -516,6 +530,23 @@ export class Net {
       if (was !== NET_STATE.OFF) this.fail(this.gotWelcome ? 'ulanish uzildi' : this.error || 'relay server topilmadi');
       this.emit('status');
     };
+  }
+
+  loadToken() {
+    try {
+      return sessionStorage.getItem('arena.token') || '';
+    } catch {
+      return '';
+    }
+  }
+
+  saveToken(tok) {
+    this.token = tok;
+    try {
+      sessionStorage.setItem('arena.token', tok);
+    } catch {
+      /* ignore */
+    }
   }
 
   fail(msg) {
@@ -553,8 +584,64 @@ export class Net {
         this.id = msg.id;
         this.state = NET_STATE.LOBBY;
         this.error = null;
+        if (msg.token) this.saveToken(msg.token);
         this.emit('status');
         this.emit('rooms', msg.rooms || []);
+        if (msg.reconnect) this.emit('reconnect', msg);
+        break;
+      case 'queued':
+        this.queue = { mode: msg.mode, ranked: msg.ranked };
+        this.emit('queue', msg);
+        break;
+      case 'unqueued':
+        this.queue = null;
+        this.emit('queue', null);
+        break;
+      case 'queue_fail':
+        this.queue = null;
+        this.emit('queuefail', msg);
+        break;
+      case 'match_found':
+        this.queue = null;
+        this.roster = msg.roster || [];
+        this.emit('matchfound', msg);
+        break;
+      case 'vote_start':
+        this.vote = {
+          arenas: msg.arenas || [],
+          secs: msg.secs || 9,
+          startedAt: Date.now(),
+          counts: {},
+          myVote: null,
+          bots: msg.bots || [],
+          roster: msg.roster || this.roster,
+        };
+        if (msg.roster) this.roster = msg.roster;
+        this.emit('votestart', this.vote);
+        break;
+      case 'vote_update':
+        if (this.vote) {
+          this.vote.counts = msg.counts || {};
+          this.vote.voted = msg.voted;
+        }
+        this.emit('voteupdate', this.vote);
+        break;
+      case 'vote_result':
+        if (this.vote) this.vote.result = msg.arena;
+        this.emit('voteresult', msg);
+        break;
+      case 'party_update':
+        this.party = msg.party || null;
+        this.emit('party', this.party);
+        break;
+      case 'rewards':
+        this.rewards = msg.rewards;
+        this.emit('rewards', msg.rewards);
+        break;
+      case 'peer_rejoined':
+        this.roster = msg.roster || this.roster;
+        this.emit('roster');
+        this.emit('rejoined', msg);
         break;
       case 'created':
       case 'joined': {
@@ -562,10 +649,16 @@ export class Net {
         this.roster = msg.roster || [];
         this.hostId = msg.host;
         this.mySlot = msg.slot ?? this.roster.findIndex((r) => r.id === this.id);
+        this.myTeam = msg.team ?? null;
+        this.roomMode = msg.mode || 'solo';
+        this.roomRanked = !!msg.ranked;
+        this.roomPhase = msg.phase || 'lobby';
         this.role = this.hostId === this.id ? 'host' : 'guest';
         this.state = NET_STATE.LOBBY;
         this.emit('roster');
         this.emit('status');
+        if (msg.phase === 'vote') this.emit('needvote');
+        if (msg.phase === 'playing' && msg.cfg) this.emit('start', { cfg: msg.cfg, roster: this.roster, host: msg.host });
         break;
       }
       case 'peer_joined':
@@ -586,7 +679,9 @@ export class Net {
         break;
       case 'room_start': {
         this.roster = msg.roster || this.roster;
+        this.roomPhase = 'playing';
         this.state = NET_STATE.PLAYING;
+        this.vote = null;
         this.emit('start', msg);
         break;
       }
@@ -601,6 +696,9 @@ export class Net {
         break;
       case 'ev':
         this.emit('ev', msg.d);
+        break;
+      case 'emote':
+        this.emit('emote', { slot: msg.slot, e: msg.d });
         break;
       case 'rooms':
         this.emit('rooms', msg.rooms || []);
@@ -617,8 +715,45 @@ export class Net {
   }
 
   /* lobby actions */
-  create() {
-    this.send({ t: 'create' });
+  create(mode = 'solo', ranked = false, allowBots = true) {
+    this.send({ t: 'create', mode, ranked, allowBots });
+  }
+
+  queue(mode, ranked, allowBots) {
+    this.send({ t: 'queue', mode, ranked, allowBots });
+  }
+
+  unqueue() {
+    this.send({ t: 'unqueue' });
+  }
+
+  vote(arena, botVotes) {
+    if (this.vote) this.vote.myVote = arena;
+    this.send({ t: 'vote', arena, bots: botVotes || undefined });
+  }
+
+  emote(e) {
+    this.send({ t: 'emote', d: String(e).slice(0, 8) });
+  }
+
+  partyCreate() {
+    this.send({ t: 'party_create' });
+  }
+
+  partyJoin(code) {
+    this.send({ t: 'party_join', code });
+  }
+
+  partyLeave() {
+    this.send({ t: 'party_leave' });
+  }
+
+  partyKick(id) {
+    this.send({ t: 'party_kick', id });
+  }
+
+  partyTransfer(id) {
+    this.send({ t: 'party_transfer', id });
   }
 
   join(code) {
@@ -650,6 +785,8 @@ export class Net {
   reportResult(results) {
     this.send({ t: 'result', results });
   }
+
+  /** host: submit bot votes together with own vote (casual only) */
 
   /* in-game */
   sendInput(input, dt) {

@@ -38,6 +38,15 @@ export function createPlayer(spec = {}) {
 
     dashT: 0,
     dashCd: 0,
+    dashCharges: 0,
+    dashMax: 1,
+    mirrorT: 0,
+    starT: 0,
+    combo: 0,
+    comboT: 0,
+    emote: null,
+    emoteT: 0,
+    team: null,
     dashDirX: 1,
     dashDirY: 0,
     dashTrail: [],
@@ -96,6 +105,13 @@ export function resetPlayerForRound(p, tile, facing) {
   p.hopT = 0;
   p.dashT = 0;
   p.dashCd = 0;
+  p.dashCharges = p.dashMax || 1;
+  p.mirrorT = 0;
+  p.starT = 0;
+  p.combo = 0;
+  p.comboT = 0;
+  p.emote = null;
+  p.emoteT = 0;
   p.speedT = 0;
   p.phantomT = 0;
   p.freezeT = 0;
@@ -140,7 +156,11 @@ export function dashCooldownFor(p) {
 }
 
 export function tryDash(p, dirX, dirY, emit) {
-  if (p.dashCd > 0 || p.dashT > 0) return false;
+  if (p.dashT > 0) return false;
+  if (p.dashCd > 0) {
+    if ((p.dashCharges || 0) <= 0) return false;
+    p.dashCharges--;
+  }
   const len = Math.hypot(dirX, dirY);
   if (len < 0.01) {
     dirX = Math.cos(p.facing);
@@ -184,6 +204,10 @@ export function stepPlayer(p, arena, dt, input, ctx) {
   const maxSpeed = PLAYER.maxSpeed * sm;
   let mx = input?.mx ?? 0;
   let my = input?.my ?? 0;
+  if (p.mirrorT > 0) {
+    mx = -mx;
+    my = -my;
+  }
   const mlen = Math.hypot(mx, my);
   if (mlen > 1) {
     mx /= mlen;
@@ -210,11 +234,11 @@ export function stepPlayer(p, arena, dt, input, ctx) {
     p.vx += mx * PLAYER.accel * control * dt;
     p.vy += my * PLAYER.accel * control * dt;
 
-    const friction = p.falling
+    const friction = (p.falling
       ? 1.6
       : supported && tile
         ? MATERIALS[tile.mat].friction
-        : 3.2;
+        : 3.2) * (ctx?.slipMul ?? 1);
     const damp = Math.exp(-friction * dt);
     p.vx *= damp;
     p.vy *= damp;
@@ -406,9 +430,30 @@ export function grantPowerup(p, type, arena, emit) {
         if (t) {
           for (const cand of arena.list) {
             if (cand === t) continue;
-            const d = hexDistance(cand.q, cand.r, t.q, t.r);
+            const d = arena.dist(cand.q, cand.r, t.q, t.r);
             if (d <= def.radius && cand.state >= TILE.CRACKED) arena.forceCrack(cand, d === 1 ? 0.5 : 0.95);
           }
+        }
+      }
+      break;
+    case 'star':
+      p.starT = def.duration;
+      p.points += 15;
+      break;
+    case 'mirror':
+      p.mirrorT = def.duration;
+      break;
+    case 'portal':
+      if (arena) {
+        const safe = arena.list.filter((t) => t.state === TILE.SOLID && t.occupants === 0);
+        if (safe.length) {
+          const t = safe[Math.floor(arena.rng() * safe.length)];
+          p.x = t.x;
+          p.y = t.y;
+          p.vx = 0;
+          p.vy = 0;
+          p.falling = false;
+          p.fallT = 0;
         }
       }
       break;

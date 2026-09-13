@@ -5,34 +5,46 @@
 
 import { TILE, MAT, MATERIALS, ARENA } from './config.js?v=20260913';
 import { axialToPixel, pixelToAxial, hexDistance, hexSpiral, hexRing } from './hex.js?v=20260913';
+import { arenaDef } from './arenas.js?v=20260913';
 import { clamp } from './rng.js?v=20260913';
 
 const key = (q, r) => q + ',' + r;
 
 export class Arena {
-  constructor({ radius = ARENA.radius, size = ARENA.tileSize, rng, mixSpecials = ARENA.mixSpecials }) {
-    this.radius = radius;
-    this.size = size;
+  constructor({ def, radius = ARENA.radius, size, rng, mixSpecials, arenaId = 'chaos_core' }) {
+    // V2: every map is pure data — one simulation code path for all arenas.
+    this.def = def || arenaDef(arenaId);
+    this.gridType = this.def.gridType;
+    this.radius = this.gridType === 'hex' ? radius : this.def.n / 2;
+    this.n = this.def.n || 8;
+    this.size = size || this.def.cell;
     this.rng = rng;
-    this.mixSpecials = mixSpecials;
+    this.mixSpecials = mixSpecials ?? this.def.specialChance;
     this.tiles = new Map();
     this.list = [];
-    this.maxRing = radius;
+    this.maxRing = this.gridType === 'hex' ? radius : this.n / 2;
     this.elapsed = 0;
-    this.nextQuake = ARENA.firstQuake;
-    this.nextCollapse = ARENA.firstCollapse;
+    this.nextQuake = this.def.firstQuake;
+    this.nextCollapse = this.def.firstCollapse;
     this.collapseWarn = 0;
     this.quakeFlash = 0;
     this.events = [];
+    this.modCrack = 1; // round-modifier multiplier (FAST TILES etc.)
     this.build();
   }
 
   build() {
     this.tiles.clear();
     this.list = [];
-    for (const { q, r } of hexSpiral(this.radius)) {
-      const p = axialToPixel(q, r, this.size);
-      const d = hexDistance(q, r, 0, 0);
+    const cells =
+      this.gridType === 'hex'
+        ? hexSpiral(this.radius).map(({ q, r }) => ({ q, r, d: hexDistance(q, r, 0, 0) }))
+        : this.squareCells();
+    for (const { q, r, d } of cells) {
+      const p =
+        this.gridType === 'hex'
+          ? axialToPixel(q, r, this.size)
+          : { x: (q - (this.n - 1) / 2) * this.size, y: (r - (this.n - 1) / 2) * this.size };
       let mat = MAT.NORMAL;
       if (d > 0 && this.rng.chance(this.mixSpecials)) {
         const roll = this.rng();
@@ -42,6 +54,7 @@ export class Arena {
         q,
         r,
         d,
+        ci: (q * 3 + r * 5 + ((q + r) & 1)) % 6,
         x: p.x,
         y: p.y,
         mat,
@@ -62,11 +75,33 @@ export class Arena {
     }
   }
 
+  /** 8x8 (nxn) square lattice with chebyshev rings. */
+  squareCells() {
+    const c = (this.n - 1) / 2;
+    const out = [];
+    for (let q = 0; q < this.n; q++) {
+      for (let r = 0; r < this.n; r++) {
+        out.push({ q, r, d: Math.ceil(Math.max(Math.abs(q - c), Math.abs(r - c))) });
+      }
+    }
+    return out;
+  }
+
   get(q, r) {
     return this.tiles.get(key(q, r)) || null;
   }
 
+  /** Grid distance between two cells (hex steps or chebyshev). */
+  dist(aq, ar, bq, br) {
+    if (this.gridType === 'square') return Math.max(Math.abs(aq - bq), Math.abs(ar - br));
+    return hexDistance(aq, ar, bq, br);
+  }
+
   tileAt(x, y) {
+    if (this.gridType === 'square') {
+      const c = (this.n - 1) / 2;
+      return this.get(Math.round(x / this.size + c), Math.round(y / this.size + c));
+    }
     const { q, r } = pixelToAxial(x, y, this.size);
     return this.get(q, r);
   }
@@ -74,14 +109,11 @@ export class Arena {
   neighbors(tile) {
     const out = [];
     if (!tile) return out;
-    for (const [dq, dr] of [
-      [1, 0],
-      [1, -1],
-      [0, -1],
-      [-1, 0],
-      [-1, 1],
-      [0, 1],
-    ]) {
+    const dirs =
+      this.gridType === 'square'
+        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        : [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+    for (const [dq, dr] of dirs) {
       const n = this.get(tile.q + dq, tile.r + dr);
       if (n) out.push(n);
     }
@@ -111,7 +143,22 @@ export class Arena {
   }
 
   get worldRadius() {
-    return this.size * (this.maxRing + 0.5) * 1.8;
+    return this.gridType === 'square'
+      ? this.size * (this.maxRing + 0.9)
+      : this.size * (this.maxRing + 0.5) * 1.8;
+  }
+
+  /** View extents used by the camera fit (per grid geometry). */
+  get viewW() {
+    return this.gridType === 'square'
+      ? this.size * (this.maxRing * 2 + 1.6)
+      : this.size * Math.sqrt(3) * (this.maxRing + 1.15) * 2;
+  }
+
+  get viewH() {
+    return this.gridType === 'square'
+      ? this.size * (this.maxRing * 2 + 1.6) + ARENA.depth * 3
+      : this.size * 1.5 * (this.maxRing + 1.15) * 2 + ARENA.depth * 3;
   }
 
   addPressure(tile, amount) {
@@ -131,7 +178,7 @@ export class Arena {
     if (!tile || tile.state < TILE.SOLID) return false;
     if (tile.state === TILE.SOLID) {
       tile.state = TILE.CRACKED;
-      tile.timer = MATERIALS[tile.mat].crackTime * timeMul;
+      tile.timer = MATERIALS[tile.mat].crackTime * this.def.crackMul * this.modCrack * timeMul;
       tile.flash = 0.3;
       this.pushEvent('crack', { q: tile.q, r: tile.r, x: tile.x, y: tile.y, mat: tile.mat, forced: true });
       return true;
@@ -184,10 +231,12 @@ export class Arena {
 
   /** Shrink the arena by one ring. */
   collapseRing() {
-    const ring = hexRing(this.maxRing);
+    const ring =
+      this.gridType === 'square'
+        ? this.list.filter((t) => t.d === this.maxRing)
+        : hexRing(this.maxRing).map(({ q, r }) => this.get(q, r)).filter(Boolean);
     let hit = 0;
-    for (const { q, r } of ring) {
-      const t = this.get(q, r);
+    for (const t of ring) {
       if (!t) continue;
       if (t.state === TILE.CRACKED) {
         t.timer = Math.min(t.timer, 0.4);
@@ -210,9 +259,9 @@ export class Arena {
       // Quakes come faster as the round drags on, and very fast once the
       // arena has nothing left to shrink.
       const interval =
-        this.maxRing <= 0
+        this.maxRing <= this.def.minRing
           ? ARENA.suddenDeathQuake
-          : Math.max(2.4, ARENA.quakeInterval - this.elapsed / 45);
+          : Math.max(2.4, this.def.quakeInterval - this.elapsed / 45);
       this.nextQuake += interval;
       const n = ARENA.quakeBase + Math.floor(this.elapsed / ARENA.quakeRamp);
       this.quake(n);
@@ -220,8 +269,8 @@ export class Arena {
 
     const toCollapse = this.nextCollapse - this.elapsed;
     this.collapseWarn = toCollapse < 2 ? clamp(toCollapse / 2, 0, 1) : 0;
-    if (this.elapsed >= this.nextCollapse && this.maxRing >= ARENA.minRing) {
-      this.nextCollapse += ARENA.collapseInterval;
+    if (this.elapsed >= this.nextCollapse && this.maxRing >= this.def.minRing) {
+      this.nextCollapse += this.def.collapseInterval;
       this.collapseRing();
     }
 
@@ -294,10 +343,13 @@ export class Arena {
   /** Evenly spaced spawn tiles near the rim. */
   spawnPoints(count) {
     const ring = Math.max(1, this.maxRing - 1);
-    const cells = hexRing(ring).filter((c) => {
-      const t = this.get(c.q, c.r);
-      return t && t.state === TILE.SOLID;
-    });
+    const cells =
+      this.gridType === 'square'
+        ? this.list.filter((t) => t.d === ring && t.state === TILE.SOLID)
+        : hexRing(ring).filter((c) => {
+            const t = this.get(c.q, c.r);
+            return t && t.state === TILE.SOLID;
+          });
     const out = [];
     if (!cells.length) {
       const any = this.list.filter((t) => t.state === TILE.SOLID);
