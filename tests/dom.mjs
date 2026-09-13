@@ -187,10 +187,21 @@ ok(doc.getElementById('menu').classList.contains('hidden'), 'menu hidden after s
 ok(!doc.getElementById('hud').classList.contains('hidden'), 'hud shown after start');
 
 console.log('gameplay frames');
-frames(120);
+frames(200); // countdown ~3s
+const game = win.__game;
+const meP = () => game.match.players.find((p) => !p.isBot);
+const before = { x: meP().x, y: meP().y };
 key('keydown', 'KeyW');
 key('keydown', 'KeyD');
-frames(90);
+frames(60);
+const moved = Math.hypot(meP().x - before.x, meP().y - before.y);
+ok(moved > 40, `human moves with WASD (Δ=${moved.toFixed(0)}px)`);
+const cdBefore = meP().dashCd;
+key('keydown', 'Space');
+frames(4);
+key('keyup', 'Space');
+ok(meP().dashCd > cdBefore || meP().dashT > 0, 'dash fires on SPACE');
+frames(60);
 key('keydown', 'Space');
 frames(20);
 key('keyup', 'Space');
