@@ -30,6 +30,8 @@ export class Input {
     ];
     this.onAction = null; // (name) => void — pause / mute / confirm
     this.touch = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, dash: false, dashQueued: 0 };
+    this.look = null; // right-side look drag (mobile) / right-mouse drag (desktop)
+    this._yawAcc = 0;
     this.isTouchDevice = false;
     this.bind();
   }
@@ -79,10 +81,9 @@ export class Input {
             this.touch.x = t.clientX;
             this.touch.y = t.clientY;
           }
-        } else {
-          this.touch.dash = true;
-          this.touch.dashQueued = DASH_BUFFER;
-          this.queueDash('Space');
+        } else if (this.look === null) {
+          // look zone: drag = camera yaw, quick tap = dash/jump
+          this.look = { id: t.identifier, x: t.clientX, t0: performance.now(), moved: false };
         }
       }
       e.preventDefault();
@@ -92,6 +93,11 @@ export class Input {
         if (t.identifier === this.touch.id) {
           this.touch.x = t.clientX;
           this.touch.y = t.clientY;
+        } else if (this.look && t.identifier === this.look.id) {
+          const dx = t.clientX - this.look.x;
+          this.look.x = t.clientX;
+          if (Math.abs(dx) > 6) this.look.moved = true;
+          this._yawAcc -= dx * 0.006;
         }
       }
       e.preventDefault();
@@ -101,8 +107,13 @@ export class Input {
         if (t.identifier === this.touch.id) {
           this.touch.id = null;
           this.touch.active = false;
-        } else {
-          this.touch.dash = false;
+        } else if (this.look && t.identifier === this.look.id) {
+          if (!this.look.moved && performance.now() - this.look.t0 < 260) {
+            this.touch.dash = true;
+            this.touch.dashQueued = DASH_BUFFER;
+            this.queueDash('Space');
+          }
+          this.look = null;
         }
       }
       e.preventDefault();
@@ -111,6 +122,12 @@ export class Input {
     el.addEventListener('touchmove', onMove, { passive: false });
     el.addEventListener('touchend', onEnd, { passive: false });
     el.addEventListener('touchcancel', onEnd, { passive: false });
+
+    // --- desktop look: right-mouse drag rotates the camera ---------------
+    window.addEventListener('mousemove', (e) => {
+      if (e.buttons & 2) this._yawAcc -= (e.movementX || 0) * 0.0042;
+    });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   isGameKey(code) {
@@ -147,6 +164,12 @@ export class Input {
   }
 
   /** Call once per frame; returns Map<controlsIndex, input>. */
+  takeYaw() {
+    const d = this._yawAcc || 0;
+    this._yawAcc = 0;
+    return d;
+  }
+
   sample(dt) {
     const a = this.axis(P1_KEYS);
     let ax = a.x;

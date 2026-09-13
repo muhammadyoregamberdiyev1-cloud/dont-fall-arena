@@ -1,8 +1,8 @@
 {
   "name": "dont-fall-arena",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Don't Fall Arena \u2014 olti burchakli plitalar qulab tushadigan arenada oxirgi bo'lib qoling.",
+  "description": "Don't Fall Arena — olti burchakli plitalar qulab tushadigan arenada oxirgi bo'lib qoling.",
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
@@ -11,7 +11,10 @@
     "test:dom": "node --import ./tools/qloader.mjs tests/dom.mjs",
     "test:shot": "node --import ./tools/qloader.mjs tests/shot.mjs",
     "test:net": "node --import ./tools/qloader.mjs tests/net.mjs",
-    "test:online": "node tools/check-online.mjs 8080"
+    "test:online": "node tools/check-online.mjs 8080",
+    "test:i18n": "node --import ./tools/qloader.mjs tests/i18n.mjs",
+    "test:server": "python3 tests/test_server.py",
+    "test:all": "npm test && npm run test:dom && npm run test:net && npm run test:i18n && npm run test:server"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.9",

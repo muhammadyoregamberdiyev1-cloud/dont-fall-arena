@@ -1,7 +1,7 @@
 // tests/net.mjs — host/guest relay pipeline without sockets: identical seeds +
 // snapshot stream must keep every guest in step with the host simulation.
 import { Match } from '../src/match.js?v=20260913';
-import { NetHost, NetGuest } from '../src/net.js?v=20260913';
+import { NetHost, NetGuest, buildGuestView } from '../src/net.js?v=20260913';
 import { PALETTE } from '../src/config.js?v=20260913';
 
 const fails = [];
@@ -15,7 +15,7 @@ const roster = [
   { id: 'B', name: 'Vali', slot: 1 },
   { id: 'C', name: 'Salim', slot: 2 },
 ].map((r) => ({ ...r, color: PALETTE[r.slot] }));
-const cfg = { seed: 4242, radius: 6, roundsToWin: 3, difficulty: 'normal', round: 1, maxRounds: 7 };
+const cfg = { seed: 4242, radius: 6, roundsToWin: 3, difficulty: 'normal', round: 1, maxRounds: 7, arenaId: 'color_grid' };
 
 const wire = [];                       // host → guests
 const hostNet = { connected: true, guestCount: () => 2, send: (o) => wire.push(o), id: 'A', role: 'host' };
@@ -115,6 +115,33 @@ for (let i = 0; i < 12; i++) {
 }
 const drift2 = Math.hypot(guest.view.players[0].x - match.players[0].x, guest.view.players[0].y - match.players[0].y);
 ok(drift2 < 2, `guest snaps back to the host position (${drift2.toFixed(2)}px)`);
+
+console.log('V2: teams, arenaId va modifier guest view ga o‘tadi');
+{
+  const tRoster = [
+    { id: 'A', name: 'Ali', slot: 0, color: PALETTE[0], team: 0 },
+    { id: 'B', name: 'Vali', slot: 1, color: PALETTE[1], team: 1 },
+    { id: 'C', name: 'Salim', slot: 2, color: PALETTE[2], team: 0 },
+    { id: 'D', name: 'Hasan', slot: 3, color: PALETTE[3], team: 1 },
+  ];
+  const tMatch = new Match({
+    seed: 777, humans: 4, bots: 0, mode: '2v2', arenaId: 'chaos_core',
+    modifier: 'fastTiles', netRoster: tRoster.map((r, i) => ({ ...r, isLocal: i === 0 })),
+  });
+  const tHost = new NetHost({ connected: true, guestCount: () => 3, send: () => {}, id: 'A', role: 'host' });
+  tHost.reset(tMatch);
+  const rm = tHost.roundMessage(tMatch);
+  ok(rm.arenaId === 'chaos_core' && rm.mode === '2v2' && rm.modifier === 'fastTiles', 'roundMessage carries V2 cfg');
+  const tView = buildGuestView({ ...rm }, tRoster, 2);
+  ok(tView.players.filter((p) => p.team === 0).length === 2, 'guest view splits teams 2v2');
+  ok(tView.players.find((p) => p.isLocal).netSlot === 2, 'guest view local seat correct');
+  ok(
+    tView.arena.list.length === tMatch.arena.list.length &&
+      tView.arena.list.every((t, i) => t.material === tMatch.arena.list[i].material),
+    'chaos_core arena identical on host and guest'
+  );
+  ok(tView.arena.modCrack === 0.55, 'fastTiles modifier synced to guest');
+}
 
 if (fails.length) {
   console.error(`\n❌ ${fails.length} test yiqildi:\n- ` + fails.join('\n- '));

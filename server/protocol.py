@@ -53,6 +53,7 @@ VOTE = "vote"
 VOTE_UPDATE = "vote_update"
 VOTE_RESULT = "vote_result"
 
+START = "start"
 ROOM_START = "room_start"
 ROOM_CHAT = "room_chat"
 PEER_JOINED = "peer_joined"

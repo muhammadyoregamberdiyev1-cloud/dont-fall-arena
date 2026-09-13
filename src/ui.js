@@ -147,6 +147,49 @@ const I18N = {
     youGuest: 'Host boshlashini kuting…',
     noRooms: 'Hozircha ochiq xona yo‘q — o‘zingiz yarating!',
     chat: 'Chat',
+    play: 'O‘YNASH',
+    casual: 'CASUAL',
+    ranked: 'RANKED',
+    allowBots: 'Botlar mumkin',
+    onlineQueue: 'Onlayn queue',
+    rankedNote: 'Faqat haqiqiy o‘yinchilar — botlar yo‘q',
+    queueCasual: 'Queue: casual xona qidirilmoqda…',
+    queueRanked: 'Queue: ranked raqiblar qidirilmoqda…',
+    mmFail: 'Matchmaking: xona to‘lmadi — keyinroq urining',
+    modeSoloDesc: 'Har kim o‘zi uchun',
+    modeTeamDesc: 'A jamoa vs B jamoa',
+    mapVote: 'XARITA TANLOVI',
+    voteHint: 'Bitta arena tanlang — ovozlar yashirin hisoblanadi',
+    votes: 'ovoz',
+    mapSelected: 'Tanlandi',
+    tie: 'Durang — server hal qildi',
+    arenaColorGrid: 'Rangli Grid',
+    arenaChaosCore: 'Xaos Yadrosi',
+    teamA: 'A JAMOA',
+    teamB: 'B JAMOA',
+    party: 'PARTIYA',
+    partyCreate: 'YARATISH',
+    partyJoin: 'QO‘SHILISH',
+    partyCode: 'Partiya kodi',
+    partyLeave: 'Chiqish',
+    partyKick: 'chetlatish',
+    partyTransfer: 'liderlik',
+    partyEmpty: 'Partiya yo‘q — yaratib, do‘stlarni taklif qiling',
+    emote: 'Emote',
+    modNormal: 'ODDIY',
+    modChaos: 'XAOS',
+    modFastTiles: 'TEZ PLITALAR',
+    modSlippery: 'SILIQ MUZ',
+    modLowGrav: 'PAST GRAVITATSIYA',
+    modDoubleJump: 'IKKI SAKRASH',
+    modTinyTiles: 'KICHIK PLITALAR',
+    modSuddenLava: 'TO‘SATDAN LAVA',
+    srvXp: 'Server XP',
+    srvCoins: 'tangalar',
+    srvRp: 'RP',
+    mvp: 'MVP',
+    onlineRoom: 'ONLAYN XONA',
+    settings: 'SOZLAMALAR',
     waitHost: 'Host yangi o‘yinni boshlashini kuting…',
     hostLeft: 'Host o‘yindan chiqdi — xona tugadi',
     how_rules: 'Qoidalar',
@@ -292,6 +335,49 @@ const I18N = {
     youGuest: 'Waiting for the host to start…',
     noRooms: 'No open rooms yet — create one!',
     chat: 'Chat',
+    play: 'PLAY',
+    casual: 'CASUAL',
+    ranked: 'RANKED',
+    allowBots: 'Bots allowed',
+    onlineQueue: 'Online queue',
+    rankedNote: 'Real players only — no bots',
+    queueCasual: 'Queue: searching casual room…',
+    queueRanked: 'Queue: searching ranked opponents…',
+    mmFail: 'Matchmaking: room could not fill — try again',
+    modeSoloDesc: 'Everyone for themselves',
+    modeTeamDesc: 'Team A vs Team B',
+    mapVote: 'MAP VOTE',
+    voteHint: 'Pick one arena — votes are tallied privately',
+    votes: 'votes',
+    mapSelected: 'Selected',
+    tie: 'Tie — server decided',
+    arenaColorGrid: 'Color Grid',
+    arenaChaosCore: 'Chaos Core',
+    teamA: 'TEAM A',
+    teamB: 'TEAM B',
+    party: 'PARTY',
+    partyCreate: 'CREATE',
+    partyJoin: 'JOIN',
+    partyCode: 'Party code',
+    partyLeave: 'Leave',
+    partyKick: 'kick',
+    partyTransfer: 'leader',
+    partyEmpty: 'No party yet — create one and invite friends',
+    emote: 'Emote',
+    modNormal: 'NORMAL',
+    modChaos: 'CHAOS',
+    modFastTiles: 'FAST TILES',
+    modSlippery: 'SLIPPERY',
+    modLowGrav: 'LOW GRAVITY',
+    modDoubleJump: 'DOUBLE JUMP',
+    modTinyTiles: 'TINY TILES',
+    modSuddenLava: 'SUDDEN LAVA',
+    srvXp: 'Server XP',
+    srvCoins: 'coins',
+    srvRp: 'RP',
+    mvp: 'MVP',
+    onlineRoom: 'ONLINE ROOM',
+    settings: 'SETTINGS',
     waitHost: 'Waiting for the host to start a new match…',
     hostLeft: 'The host left — the room is closed',
     how_rules: 'Rules',
@@ -389,7 +475,17 @@ export class UI {
     this.screen = 'home'; // lobby sub-screen
     this.current = 'menu'; // app-level screen
     this.frameMs = 16;
-    this.opts = { seats: 4, difficulty: 'normal', botFill: true, two: false, entry: 'bots' };
+    this.opts = {
+      seats: 4,
+      difficulty: 'normal',
+      botFill: true,
+      two: false,
+      entry: 'bots',
+      mode: 'solo',
+      ranked: false,
+      allowBots: true,
+      onlineQueue: false,
+    };
     this.chips = new Map();
     this.effKeys = '';
     this.lastTimerText = '';
@@ -533,8 +629,30 @@ export class UI {
         <h1 class="m-title">DON'T FALL!</h1>
         <p class="m-sub">${escapeHtml(this.t('tagline'))}</p>
         ${this.statRow()}
-        <button class="big-btn green" data-act="goto-online"><span>🌐</span>${escapeHtml(this.t('playOnline'))}</button>
-        <button class="big-btn blue" data-act="setup-bots"><span>🤖</span>${escapeHtml(this.t('playBots'))}</button>
+        <div class="mode-row" role="radiogroup" aria-label="mode">
+          ${['solo', '1v1', '2v2', '3v3', '4v4']
+            .map(
+              (m) => `<button class="chip ${this.opts.mode === m ? 'on' : ''}" data-act="mode:${m}" role="radio" aria-checked="${this.opts.mode === m}">${m === 'solo' ? 'SOLO' : m}</button>`
+            )
+            .join('')}
+        </div>
+        <p class="mode-desc">${escapeHtml(this.t(this.opts.mode === 'solo' ? 'modeSoloDesc' : 'modeTeamDesc'))}</p>
+        <div class="mode-row">
+          <button class="chip ${!this.opts.ranked ? 'on gold' : ''}" data-act="ptype:casual">${escapeHtml(this.t('casual'))}</button>
+          <button class="chip ${this.opts.ranked ? 'on gold' : ''}" data-act="ptype:ranked">${escapeHtml(this.t('ranked'))}</button>
+          ${
+            this.opts.ranked
+              ? `<span class="chip-note">${escapeHtml(this.t('rankedNote'))}</span>`
+              : `<button class="chip ${this.opts.allowBots !== false ? 'on' : ''}" data-act="toggle:bots">🤖 ${escapeHtml(this.t('allowBots'))}</button>
+                 <button class="chip ${this.opts.onlineQueue ? 'on' : ''}" data-act="toggle:queue">🌐 ${escapeHtml(this.t('onlineQueue'))}</button>`
+          }
+        </div>
+        <button class="big-btn green" data-act="play"><span>▶</span>${escapeHtml(this.t('play'))}</button>
+        <div class="duo-row">
+          <button class="mid-btn blue" data-act="goto-online"><span>🌐</span>${escapeHtml(this.t('onlineRoom'))}</button>
+          <button class="mid-btn violet" data-act="goto-party"><span>👥</span>${escapeHtml(this.t('party'))}</button>
+          <button class="mid-btn" data-act="setup-bots"><span>🤖</span>${escapeHtml(this.t('settings'))}</button>
+        </div>
         <div class="card-row four">
           <button class="card c-green ${bonusReady ? '' : 'done'}" data-act="claim-bonus">
             <span class="em">🎁</span>${escapeHtml(this.t('gift'))}<span class="sub">+100 XP</span>
@@ -551,6 +669,33 @@ export class UI {
           <button class="card c-purple" data-act="goto-profile"><span class="em">👤</span>${escapeHtml(this.t('profile'))}</button>
           <button class="card c-violet" data-act="goto-skins"><span class="em">👕</span>${escapeHtml(this.t('skins'))}</button>
         </div>
+        ${this.footRow()}`;
+    } else if (this.screen === 'party') {
+      const party = this.netRef ? this.netRef.party : null;
+      const members = party
+        ? party.members
+            .map(
+              (m) => `<div class="list-row">
+                <div class="ico" style="background:${m.id === party.leader ? 'var(--gold)' : 'var(--pill)'};color:#101a33">${m.id === party.leader ? '★' : '•'}</div>
+                <div class="body"><div class="t1">${escapeHtml(m.name)}${m.id === this.netRef.id ? ' (' + escapeHtml(this.t('youLow')) + ')' : ''}</div></div>
+                ${m.id === party.leader ? '' : `<button class="mini-btn" data-act="party-kick:${m.id}">${escapeHtml(this.t('partyKick'))}</button>`}
+                ${m.id === party.leader ? '' : `<button class="mini-btn" data-act="party-transfer:${m.id}">${escapeHtml(this.t('partyTransfer'))}</button>`}
+              </div>`
+            )
+            .join('')
+        : `<p class="note">${escapeHtml(this.t('partyEmpty'))}</p>`;
+      body = `
+        ${this.statRow()}
+        <button class="back-btn" data-act="back">◀ ${escapeHtml(this.t('back'))}</button>
+        <h2 class="s-title">👥 ${escapeHtml(this.t('party'))}</h2>
+        ${party ? `<div class="rank-strip">🔑 ${escapeHtml(party.code)}</div>` : ''}
+        <div class="list">${members}</div>
+        ${party ? `<button class="ghost" data-act="party-leave" style="width:100%">◀ ${escapeHtml(this.t('partyLeave'))}</button>` : `
+          <button class="big-btn green" data-act="party-create"><span>🛠</span>${escapeHtml(this.t('partyCreate'))}</button>
+          <div class="field">
+            <input id="partyCode" maxlength="4" placeholder="${escapeHtml(this.t('partyCode'))}" style="text-transform:uppercase;letter-spacing:.2em" />
+            <button class="mini-btn" data-act="party-join">${escapeHtml(this.t('partyJoin'))}</button>
+          </div>`}
         ${this.footRow()}`;
     } else if (this.screen === 'online') {
       const net = this.netRef;
@@ -809,6 +954,45 @@ export class UI {
     this.fire('click');
     const p = this.profile;
     switch (name) {
+      case 'play':
+        this.fire('start');
+        break;
+      case 'mode':
+        this.opts.mode = arg;
+        this.renderMenu();
+        this.fire('click');
+        break;
+      case 'ptype':
+        this.opts.ranked = arg === 'ranked';
+        this.renderMenu();
+        this.fire('click');
+        break;
+      case 'toggle':
+        if (arg === 'bots') this.opts.allowBots = this.opts.allowBots === false;
+        if (arg === 'queue') this.opts.onlineQueue = !this.opts.onlineQueue;
+        this.renderMenu();
+        this.fire('click');
+        break;
+      case 'goto-party':
+        this.goto('party');
+        break;
+      case 'party-create':
+        this.fire('net-party-create');
+        break;
+      case 'party-join': {
+        const inp = this.el.menuRoot.querySelector('#partyCode');
+        if (inp && inp.value.trim()) this.fire('net-party-join', inp.value.trim().toUpperCase());
+        break;
+      }
+      case 'party-leave':
+        this.fire('net-party-leave');
+        break;
+      case 'party-kick':
+        this.fire('net-party-kick', arg);
+        break;
+      case 'party-transfer':
+        this.fire('net-party-transfer', arg);
+        break;
       case 'goto-online':
         this.goto('online');
         if (this.netRef && this.netRef.connected) this.netRef.refreshRooms();
@@ -987,6 +1171,87 @@ export class UI {
     }
   }
 
+  /* ---------------------------------------------------------- map vote UI */
+
+  ensureVoteOverlay() {
+    if (this.el.vote) return this.el.vote;
+    const div = document.createElement('div');
+    div.id = 'voteOverlay';
+    div.className = 'vote-overlay hidden';
+    document.body.appendChild(div);
+    this.el.vote = div;
+    div.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-vote]');
+      if (btn) {
+        this.fire('vote', btn.getAttribute('data-vote'));
+        this.fire('click');
+      }
+    });
+    return div;
+  }
+
+  showVote(v) {
+    const el = this.ensureVoteOverlay();
+    el.classList.remove('hidden');
+    el.innerHTML = `
+      <h2>🗳 ${escapeHtml(this.t('mapVote'))}</h2>
+      <p class="v-hint">${escapeHtml(this.t('voteHint'))} • <b id="voteTimer">${v.secs}</b>s</p>
+      <div class="vote-cards">
+        ${v.arenas
+          .map(
+            (a) => `<button class="vote-card ${a === 'color_grid' ? 'cg' : 'cc'}" data-vote="${a}" id="vc-${a}">
+              <span class="vc-grid" aria-hidden="true">${Array.from({ length: 16 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</span>
+              <span class="vc-name">${escapeHtml(this.t(a === 'color_grid' ? 'arenaColorGrid' : 'arenaChaosCore'))}</span>
+              <span class="vc-bar"><i id="vb-${a}" style="width:0%"></i></span>
+              <span class="vc-count" id="vn-${a}">0 ${escapeHtml(this.t('votes'))}</span>
+            </button>`
+          )
+          .join('')}
+      </div>`;
+    this.updateVote(v);
+  }
+
+  updateVote(v) {
+    if (!this.el.vote || this.el.vote.classList.contains('hidden')) return;
+    const total = Math.max(1, v.arenas.reduce((n, a) => n + (v.counts[a] || 0), 0));
+    for (const a of v.arenas) {
+      const bar = this.el.vote.querySelector('#vb-' + a);
+      const cnt = this.el.vote.querySelector('#vn-' + a);
+      const card = this.el.vote.querySelector('#vc-' + a);
+      if (bar) bar.style.width = Math.round(((v.counts[a] || 0) / total) * 100) + '%';
+      if (cnt) cnt.textContent = `${v.counts[a] || 0} ${this.t('votes')}`;
+      if (card) card.classList.toggle('mine', v.myVote === a);
+    }
+  }
+
+  voteTimer(v) {
+    const t = this.el.vote && this.el.vote.querySelector('#voteTimer');
+    if (t) t.textContent = Math.max(0, Math.ceil(v.t));
+  }
+
+  voteResult(arena, tie) {
+    if (!this.el.vote) return;
+    for (const a of ['color_grid', 'chaos_core']) {
+      const card = this.el.vote.querySelector('#vc-' + a);
+      if (card) card.classList.toggle('win', a === arena);
+    }
+    const h = this.el.vote.querySelector('h2');
+    if (h) h.textContent = `✅ ${this.t('mapSelected')}: ${this.t(arena === 'color_grid' ? 'arenaColorGrid' : 'arenaChaosCore')}${tie ? ' (' + this.t('tie') + ')' : ''}`;
+  }
+
+  hideVote() {
+    if (this.el.vote) this.el.vote.classList.add('hidden');
+  }
+
+  showRewards(rw, gains) {
+    if (!rw) return;
+    const parts = [`+${rw.xp} ${this.t('srvXp')}`, `+${rw.coins} 🪙 ${this.t('srvCoins')}`];
+    if (rw.rp) parts.push(`${rw.rp > 0 ? '+' : ''}${rw.rp} ${this.t('srvRp')}`);
+    if (rw.mvp) parts.push('🏅 ' + this.t('mvp'));
+    this.toast((rw.won ? '🏆 ' : '🎮 ') + parts.join(' • '), rw.won ? '#ffd23f' : '#4dd0ff', 4200);
+    this.lastRewards = { rw, gains };
+  }
+
   /* ---------------------------------------------------------- online bits */
 
   setNet(net) {
@@ -1013,7 +1278,8 @@ export class UI {
 
   /* ------------------------------------------------------------------ HUD */
 
-  buildChips(players, roundsToWin) {
+  buildChips(players, roundsToWin, teamMode = false) {
+    this.teamMode = !!teamMode;
     this.el.scores.innerHTML = '';
     this.chips.clear();
     for (const p of players) {

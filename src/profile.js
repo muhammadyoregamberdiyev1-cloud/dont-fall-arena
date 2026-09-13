@@ -9,10 +9,21 @@ const KEY = 'dont-fall-arena:profile:v2';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+function makePid() {
+  try {
+    if (globalThis.crypto && crypto.randomUUID) return crypto.randomUUID().slice(0, 36);
+  } catch {
+    /* ignore */
+  }
+  return 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 export function defaultProfile() {
   return {
     name: 'Siz',
+    pid: makePid(),
     xp: 0,
+    coins: 0,
     rp: 0,
     wins: 0,
     games: 0,
@@ -32,6 +43,19 @@ export function defaultProfile() {
 }
 
 export class Profile {
+  /** Server hisoblagan onlayn mukofotni profilga qo'shadi. */
+  applyOnlineReward(rw) {
+    if (!rw) return null;
+    const before = this.data.xp;
+    this.data.xp += rw.xp || 0;
+    this.data.coins = (this.data.coins || 0) + (rw.coins || 0);
+    if (rw.rp) this.data.rp = Math.max(0, (this.data.rp || 0) + rw.rp);
+    if (rw.won) this.data.wins = (this.data.wins || 0) + 1;
+    this.data.games = (this.data.games || 0) + 1;
+    this.save();
+    return { before, after: this.data.xp, coins: rw.coins || 0, rp: rw.rp || 0, mvp: !!rw.mvp, won: !!rw.won, online: true };
+  }
+
   constructor() {
     this.data = load();
   }

@@ -196,9 +196,23 @@ doc.querySelector('[data-act="back"]').dispatchEvent(new win.MouseEvent('click',
 
 console.log('language toggle');
 doc.querySelector('[data-act="lang"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-ok(doc.querySelector('#menuRoot').innerHTML.includes('PLAY WITH BOTS'), 'lobby flips to EN');
+ok(doc.querySelector('#menuRoot').innerHTML.includes('Everyone for themselves'), 'lobby flips to EN');
 doc.querySelector('[data-act="lang"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-ok(doc.querySelector('#menuRoot').innerHTML.includes('BOTLAR BILAN'), 'lobby flips back to UZ');
+ok(doc.querySelector('#menuRoot').innerHTML.includes('Har kim o'), 'lobby flips back to UZ');
+
+console.log('mode selector + offline map vote');
+doc.querySelector('[data-act="mode:2v2"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(doc.querySelector('#menuRoot .mode-desc').textContent.includes('A jamoa'), '2v2 shows team description');
+doc.querySelector('[data-act="mode:solo"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+doc.querySelector('[data-act="play"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+frames(3);
+ok(!!doc.querySelector('#voteOverlay:not(.hidden)'), 'map vote overlay appears before the match');
+ok(doc.querySelectorAll('#voteOverlay .vote-card').length === 2, 'exactly two arena cards');
+doc.querySelector('#voteOverlay [data-vote="color_grid"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+frames(2);
+ok(doc.querySelector('#vc-color_grid').classList.contains('mine'), 'my vote is highlighted');
+for (let i = 0; i < 60 * 11; i++) frames(1);
+ok(doc.querySelector('#voteOverlay').classList.contains('hidden'), 'vote closes after the deadline');
 
 console.log('menu → match');
 frames(30);
@@ -208,6 +222,11 @@ doc.querySelector('[data-seg="difficulty"] button[data-v="spicy"]').dispatchEven
 doc.querySelector('[data-seg="seats"] button[data-v="4"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
 ok(game.ui.opts.seats === 4 && game.ui.opts.difficulty === 'spicy', 'setup options applied');
 doc.querySelector('[data-act="start"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+frames(3);
+if (doc.querySelector('#voteOverlay:not(.hidden)')) {
+  doc.querySelector('#voteOverlay [data-vote="chaos_core"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  frames(60 * 11);
+}
 ok(doc.getElementById('menu').classList.contains('hidden'), 'menu hidden after start');
 ok(!doc.getElementById('hud').classList.contains('hidden'), 'hud shown after start');
 

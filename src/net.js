@@ -76,6 +76,9 @@ export class NetHost {
       maxRounds: match.opts.maxRounds,
       roundsToWin: match.opts.roundsToWin,
       roundTime: match.opts.roundTime,
+      arenaId: match.opts.arenaId,
+      mode: match.opts.mode,
+      modifier: match.modifier || 'normal',
     };
   }
 
@@ -204,7 +207,13 @@ function flagsOf(p) {
 
 export function buildGuestView(cfg, roster, mySlot) {
   const rng = makeRng((cfg.seed + cfg.round * 7919) >>> 0);
-  const arena = new Arena({ radius: cfg.radius, rng, mixSpecials: cfg.mix ?? ARENA.mixSpecials });
+  const arena = new Arena({
+    arenaId: cfg.arenaId || 'color_grid',
+    radius: cfg.radius,
+    rng,
+    mixSpecials: cfg.mix ?? ARENA.mixSpecials,
+  });
+  arena.modCrack = cfg.modifier === 'fastTiles' ? 0.55 : 1;
   const players = roster.map((r) => {
     const p = createPlayer({
       id: 1000 + r.slot,

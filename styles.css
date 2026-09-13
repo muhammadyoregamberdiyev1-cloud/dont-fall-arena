@@ -1702,3 +1702,292 @@ body.touch .dash-btn {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ===================================================== V2: modes & vote */
+
+.mode-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 8px 0 4px;
+}
+
+.chip {
+  padding: 8px 13px;
+  border-radius: 10px;
+  border: 2px solid var(--pill-brd);
+  background: var(--pill);
+  color: var(--dim);
+  font: 900 12.5px var(--font);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+.chip.on {
+  border-color: var(--green);
+  color: #eafff0;
+  background: linear-gradient(180deg, rgba(76, 187, 88, 0.25), rgba(46, 139, 58, 0.25));
+}
+
+.chip.on.gold {
+  border-color: var(--gold);
+  color: #fff6dd;
+  background: linear-gradient(180deg, rgba(242, 193, 78, 0.22), rgba(196, 138, 40, 0.22));
+}
+
+.chip-note {
+  align-self: center;
+  font: 700 11px var(--font);
+  color: var(--dim);
+}
+
+.mode-desc {
+  text-align: center;
+  font: 700 12px var(--font);
+  color: var(--dim);
+  margin: 2px 0 6px;
+}
+
+.duo-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mid-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 8px;
+  border-radius: 12px;
+  border: 2px solid var(--pill-brd);
+  background: var(--pill);
+  color: var(--ink);
+  font: 900 12px var(--font);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.mid-btn:hover {
+  transform: translateY(-2px);
+}
+
+.mid-btn.blue {
+  border-color: #2b6cb8;
+  background: linear-gradient(180deg, rgba(75, 154, 230, 0.3), rgba(43, 108, 184, 0.3));
+}
+
+.mid-btn.violet {
+  border-color: #6d4bb8;
+  background: linear-gradient(180deg, rgba(180, 124, 255, 0.25), rgba(109, 75, 184, 0.25));
+}
+
+/* ---- map vote overlay ---- */
+
+.vote-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(6, 10, 22, 0.82);
+  backdrop-filter: blur(6px);
+  animation: kf-in 0.25s ease both;
+}
+
+.vote-overlay.hidden {
+  display: none;
+}
+
+.vote-overlay h2 {
+  font: 900 26px var(--font);
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+
+.v-hint {
+  font: 700 13px var(--font);
+  color: var(--dim);
+}
+
+.v-hint b {
+  color: #fff;
+  font: 900 15px var(--mono);
+}
+
+.vote-cards {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.vote-card {
+  position: relative;
+  width: min(300px, 42vw);
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  border: 3px solid var(--pill-brd);
+  background: var(--pill);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vote-card:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+
+.vote-card.mine {
+  border-color: var(--green);
+  box-shadow: 0 0 22px rgba(76, 187, 88, 0.35);
+}
+
+.vote-card.win {
+  border-color: var(--gold);
+  box-shadow: 0 0 34px rgba(242, 193, 78, 0.5);
+  animation: pulse-danger 0.5s 2;
+}
+
+.vc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+
+.vc-grid i {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  animation: card-in 0.4s calc(var(--i) * 0.03s) cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.vote-card.cg .vc-grid i {
+  background: hsl(calc(var(--i) * 47) 82% 62%);
+}
+
+.vote-card.cc .vc-grid i {
+  background: hsl(calc(200 + var(--i) * 6) 40% calc(28 + (var(--i) * 7) mod 30%));
+  border-radius: 50%;
+}
+
+.vc-name {
+  font: 900 16px var(--font);
+  color: var(--ink);
+}
+
+.vc-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.vc-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  transition: width 0.3s ease;
+}
+
+.vc-count {
+  font: 800 12px var(--font);
+  color: var(--dim);
+}
+
+/* ---- team HUD panels ---- */
+
+.team-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(13, 20, 36, 0.55);
+  border: 1px solid var(--pill-brd);
+  min-width: 128px;
+}
+
+.team-panel.a {
+  border-color: rgba(77, 208, 255, 0.5);
+}
+
+.team-panel.b {
+  border-color: rgba(255, 93, 115, 0.5);
+}
+
+.tp-head {
+  font: 900 10.5px var(--font);
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+.team-panel.a .tp-head {
+  color: #4dd0ff;
+}
+
+.team-panel.b .tp-head {
+  color: #ff5d73;
+}
+
+#scores {
+  gap: 8px;
+}
+
+/* ---- emote bar ---- */
+
+.emote-bar {
+  position: fixed;
+  right: 10px;
+  bottom: 12px;
+  display: flex;
+  gap: 5px;
+  z-index: 30;
+}
+
+.emote-bar button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--pill-brd);
+  background: rgba(27, 36, 56, 0.85);
+  font-size: 17px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.emote-bar button:hover {
+  transform: scale(1.15);
+}
+
+.hud.hidden .emote-bar {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .vote-card {
+    width: 44vw;
+    padding: 10px;
+  }
+
+  .emote-bar button {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+}

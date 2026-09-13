@@ -11,6 +11,7 @@ import { UI } from './ui.js?v=20260913';
 import { Profile } from './profile.js?v=20260913';
 import { ARENA, POWERUPS, THEMES, SKINS, PALETTE } from './config.js?v=20260913';
 import { Net, NET_STATE } from './net.js?v=20260913';
+import { ARENA_IDS, VOTE_SECONDS, EMOTES, MODES } from './arenas.js?v=20260913';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 5;
@@ -28,6 +29,9 @@ class Game {
     this.netRoomsList = [];
     this.netEvents = [];
     this.hitStop = 0;
+    this.yaw = 0;
+    this.voteState = null;
+    this.emoteIdx = 0;
     this.matchStartedAt = 0;
 
     this.match = null;
@@ -52,12 +56,18 @@ class Game {
       } else if (role === 'guest') {
         this.ui.toast(this.ui.t('waitHost'), '#ffd23f', 2200);
       } else {
-        this.startMatch();
+        // rematch: same arena, no re-vote
+        this.pendingArena = this.match ? this.match.opts.arenaId : this.pendingArena;
+        this.launchOfflineMatch();
       }
     });
     this.ui.on('menu', () => this.toMenu());
     this.ui.on('resume', () => this.resume());
-    this.ui.on('restart', () => this.startMatch());
+    this.ui.on('restart', () => {
+      if (this.netRole()) return;
+      this.pendingArena = this.match ? this.match.opts.arenaId : this.pendingArena;
+      this.launchOfflineMatch();
+    });
     this.ui.on('pause', () => this.togglePause());
     this.ui.on('mute', () => this.toggleSound());
     this.ui.on('click', () => {
@@ -74,10 +84,17 @@ class Game {
     this.ui.on('xp', (g) => this.onXp(g));
     this.bindNet();
 
+    this.ui.on('vote', (arena) => this.castVote(arena));
+    this.ui.on('emote', (i) => this.sendEmote(i));
     this.ui.on('net-connect', () => {
       this.sfx.unlock();
-      this.net.connect(this.profile.data.name);
+      this.net.connect(this.profile.data.name, this.profile.data.pid);
     });
+    this.ui.on('net-party-create', () => this.net.partyCreate());
+    this.ui.on('net-party-join', (code) => this.net.partyJoin(code));
+    this.ui.on('net-party-leave', () => this.net.partyLeave());
+    this.ui.on('net-party-kick', (id) => this.net.partyKick(id));
+    this.ui.on('net-party-transfer', (id) => this.net.partyTransfer(id));
     this.ui.on('net-create', () => this.net.create());
     this.ui.on('net-join', (code) => this.net.join(code));
     this.ui.on('net-leave', () => {
@@ -112,6 +129,9 @@ class Game {
     this.input.onAction = (name) => this.handleAction(name);
     window.addEventListener('keydown', () => this.sfx.unlock(), { once: true });
 
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyB' && this.state === 'playing' && !e.repeat) this.sendEmote(this.emoteIdx++);
+    });
     window.addEventListener('resize', () => this.renderer.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.renderer.resize(), 250));
     document.addEventListener('visibilitychange', () => {
@@ -123,6 +143,63 @@ class Game {
     this.ui.show('menu');
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  /* ------------------------------------------------------------- map vote */
+
+  /** Map-vote fazasi: har bir match'dan oldin (offline va onlayn). */
+  beginVote({ online = false, arenas = ARENA_IDS, secs = VOTE_SECONDS, botSeats = 0, roster = null } = {}) {
+    this.voteState = {
+      online,
+      arenas,
+      secs,
+      t: secs,
+      counts: Object.fromEntries(arenas.map((a) => [a, 0])),
+      myVote: null,
+      botSeats,
+      roster,
+      done: false,
+    };
+    if (!online) {
+      // casual bots vote with weighted (not fixed) preferences
+      const w = Math.random();
+      const botA = arenas[0], botB = arenas[1];
+      for (let i = 0; i < botSeats; i++) {
+        const pick = Math.random() < w ? botA : botB;
+        this.voteState.counts[pick]++;
+      }
+    }
+    this.state = 'vote';
+    this.ui.showVote(this.voteState);
+    this.sfx.play('hover');
+  }
+
+  castVote(arena) {
+    const v = this.voteState;
+    if (!v || v.done || !v.arenas.includes(arena)) return;
+    if (v.myVote) v.counts[v.myVote] = Math.max(0, v.counts[v.myVote] - 1);
+    v.myVote = arena;
+    v.counts[arena]++;
+    if (v.online) {
+      let botVotes;
+      if (this.net.role === 'host' && v.botSeatsList && v.botSeatsList.length) {
+        botVotes = {};
+        for (const seat of v.botSeatsList) botVotes[seat.slot] = Math.random() < 0.5 ? v.arenas[0] : v.arenas[1];
+      }
+      this.net.vote(arena, botVotes);
+    } else {
+      this.ui.updateVote(v);
+    }
+  }
+
+  finishVote(chosen, tie = false) {
+    const v = this.voteState;
+    if (!v || v.done) return;
+    v.done = true;
+    v.chosen = chosen;
+    v.hiding = 1.4;
+    this.ui.voteResult(chosen, tie);
+    this.sfx.play('go');
   }
 
   /* ------------------------------------------------------------ online io */
@@ -142,6 +219,38 @@ class Game {
       this.ui.goto('online');
     });
     net.on('peer', () => this.sfx.play('hover'));
+    net.on('votestart', (v) => {
+      this.beginVote({
+        online: true,
+        arenas: v.arenas,
+        secs: v.secs,
+        botSeats: (v.bots || []).length,
+        roster: v.roster,
+      });
+      if (this.voteState) this.voteState.botSeatsList = v.bots || [];
+    });
+    net.on('voteupdate', (v) => {
+      if (this.voteState && v) {
+        this.voteState.counts = v.counts || this.voteState.counts;
+        this.ui.updateVote(this.voteState);
+      }
+    });
+    net.on('voteresult', (msg) => this.finishVote(msg.arena, !!msg.tie));
+    net.on('rewards', (rw) => {
+      const gains = this.profile.applyOnlineReward(rw);
+      this.ui.showRewards(rw, gains);
+    });
+    net.on('emote', ({ slot, e }) => {
+      const p = this.match && this.match.players.find((x) => x.netSlot === slot);
+      if (p) {
+        p.emote = e;
+        p.emoteT = 2.2;
+      }
+    });
+    net.on('queuefail', () => this.ui.toast(this.ui.t('mmFail'), '#ff8a94', 3200));
+    net.on('party', () => {
+      if (this.ui.screen === 'party') this.ui.renderMenu();
+    });
     net.on('rstart', (cfg) => this.beginOnline(cfg));
     net.on('start', (msg) => this.beginOnline(msg.cfg, msg.roster));
     net.on('snap', (d) => {
@@ -256,6 +365,57 @@ class Game {
   }
 
   startMatch() {
+    const o = this.ui.opts;
+    if (o.ranked) {
+      // ranked: faqat haqiqiy o'yinchilar — relay orqali queue
+      if (!this.net.connected) this.net.connect(this.profile.data.name, this.profile.data.pid);
+      this.net.queue(o.mode, true, false);
+      this.ui.toast(this.ui.t('queueRanked'), '#4dd0ff', 2400);
+      return;
+    }
+    if (o.onlineQueue) {
+      if (!this.net.connected) this.net.connect(this.profile.data.name, this.profile.data.pid);
+      this.net.queue(o.mode, false, o.allowBots !== false);
+      this.ui.toast(this.ui.t('queueCasual'), '#4dd0ff', 2400);
+      return;
+    }
+    // casual offline: avval map vote, keyin match
+    const modeDef = MODES[o.mode] || MODES.solo;
+    this.offlineOpts = { ...o };
+    this.sfx.unlock();
+    this.beginVote({ online: false, botSeats: Math.max(0, modeDef.size - 1) });
+  }
+
+  launchOfflineMatch() {
+    const o = this.offlineOpts || this.ui.opts;
+    const modeDef = MODES[o.mode] || MODES.solo;
+    const seats = o.mode === 'solo' ? Math.max(2, Math.min(8, o.seats || 4)) : modeDef.size;
+    this.sfx.play('start');
+    this.match = new Match({
+      seed: Math.floor(Math.random() * 1e9),
+      humans: 1,
+      bots: seats - 1,
+      difficulty: o.difficulty || 'normal',
+      arenaRadius: seats <= 2 ? 5 : seats <= 4 ? 6 : 7,
+      arenaId: this.pendingArena || 'color_grid',
+      mode: o.mode || 'solo',
+      roundsToWin: 3,
+      maxRounds: 7,
+      roundTime: ARENA.roundTime,
+      humanNames: [this.profile.data.name],
+      humanColors: [this.profile.skinColor()],
+    });
+    this.attract = null;
+    this.state = 'playing';
+    this.matchStartedAt = performance.now();
+    this.ui.buildChips(this.match.players, this.match.opts.roundsToWin, this.match.teamMode);
+    this.ui.clearFeed();
+    this.ui.show('hud');
+    this.ui.el.hint.textContent = this.ui.t('hint1');
+    document.body.classList.toggle('touch', this.input.isTouchDevice);
+  }
+
+  startMatchLegacy() {
     this.sfx.unlock();
     this.sfx.play('start');
 
@@ -330,6 +490,12 @@ class Game {
 
   handleAction(name) {
     switch (name) {
+      case 'emote':
+        this.sendEmote(arg || 0);
+        break;
+      case 'vote':
+        this.castVote(arg);
+        break;
       case 'pause':
         if (this.state === 'playing' || this.state === 'paused') this.togglePause();
         break;
@@ -356,6 +522,32 @@ class Game {
     this.last = now;
     if (rawDt <= 0) return;
     this.ui.frameMs = this.ui.frameMs * 0.9 + rawDt * 1000 * 0.1;
+
+    if (this.state === 'vote' && this.voteState) {
+      const v = this.voteState;
+      if (!v.done && !v.online) {
+        v.t -= rawDt;
+        this.ui.voteTimer(v);
+        if (v.t <= 0) {
+          const c = v.counts;
+          const top = Math.max(...v.arenas.map((a) => c[a]));
+          const tied = v.arenas.filter((a) => c[a] === top);
+          const chosen = tied.length === 1 ? tied[0] : tied[Math.floor(Math.random() * tied.length)];
+          this.finishVote(chosen, tied.length > 1);
+        }
+      } else if (v.done && !v.online) {
+        v.hiding -= rawDt;
+        if (v.hiding <= 0) {
+          this.ui.hideVote();
+          this.pendingArena = v.chosen;
+          this.voteState = null;
+          this.launchOfflineMatch();
+          return;
+        }
+      }
+      if (this.attract || this.match) this.renderer.draw(this.attract || this.match, rawDt, { focus: null, yaw: this.yaw });
+      return;
+    }
 
     if (this.state === 'menu' && this.attract) {
       this.acc += rawDt;
@@ -391,16 +583,20 @@ class Game {
         }
       }
       const meG = this.match.players.find((p) => p.isLocal);
-      this.renderer.draw(this.match, rawDt, { focus: meG && meG.alive ? meG : null });
+      this.renderer.draw(this.match, rawDt, { focus: meG && meG.alive ? meG : null, yaw: this.yaw });
       if (this.state === 'playing') this.ui.updateHud(this.match, rawDt);
       this.updateTouchStick();
       return;
     }
 
+    // camera look (mouse drag / right-side touch zone)
+    const yawDelta = this.input.takeYaw ? this.input.takeYaw() : 0;
+    if (yawDelta) this.yaw = (this.yaw + yawDelta) % (Math.PI * 2);
+
     if (live) {
       if (this.hitStop > 0) {
         this.hitStop -= rawDt;
-        this.renderer.draw(this.match, rawDt, { focus: this.match.players.find((p) => !p.isBot) });
+        this.renderer.draw(this.match, rawDt, { focus: this.match.players.find((p) => !p.isBot), yaw: this.yaw });
         return;
       }
       this.acc += rawDt;
@@ -412,6 +608,12 @@ class Game {
           let raw;
           if (p.isLocal) raw = inputs.get(p.controls) || { mx: 0, my: 0, dash: false };
           else raw = this.net.inputFor(p.netSlot);
+          // W/A/D kamera yo'nalishiga nisbatan (yaw rotatsiyasi)
+          if (this.yaw) {
+            const c = Math.cos(this.yaw);
+            const sn = Math.sin(this.yaw);
+            raw = { mx: raw.mx * c - raw.my * sn, my: raw.mx * sn + raw.my * c, dash: raw.dash };
+          }
           map.set(p.id, steps === 0 ? raw : { mx: raw.mx, my: raw.my, dash: false });
         }
         this.match.update(STEP, map);
@@ -593,7 +795,15 @@ class Game {
     this.renderer.spawnConfetti();
     if (this.netRole() === 'host') {
       this.net.reportResult(
-        match.standings().map((p, i) => ({ name: p.name, wins: p.wins, place: i + 1, roundWins: p.wins }))
+        match.standings().map((p, i) => ({
+          slot: p.netSlot ?? i,
+          name: p.name,
+          wins: p.wins,
+          roundWins: p.wins,
+          points: p.points,
+          eliminations: p.stats.eliminations,
+          place: i + 1,
+        }))
       );
     }
     const humans = match.players.filter((p) => !p.isBot);

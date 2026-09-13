@@ -199,7 +199,8 @@ class Room:
         return out + list(self.bots)
 
     # -- voting ---------------------------------------------------------------
-    def start_vote(self, secs=P.VOTE_SECONDS):
+    def start_vote(self, secs=None):
+        secs = P.VOTE_SECONDS if secs is None else secs
         self.phase = "vote"
         self.votes = {}
         self.bot_votes = {}
@@ -264,8 +265,10 @@ class RoomManager:
         self._sweeper = None
 
     # -- lifecycle -----------------------------------------------------------
-    def register(self, pid, name, send, token=""):
+    def register(self, pid, name, send, token="", profile_pid=""):
         p = Player(pid, name, send, token)
+        if profile_pid:
+            p.pid = profile_pid
         self.players[pid] = p
         if token:
             self.by_token[token] = p
@@ -493,6 +496,13 @@ class RoomManager:
     # -- room tick: votes, reconnect grace, idle rooms ---------------------------
     async def tick_rooms(self):
         for room in list(self.rooms.values()):
+            try:
+                await self._tick_room(room)
+            except Exception:
+                log.exception("room tick failed (%s)", room.code)
+
+    async def _tick_room(self, room):
+        if True:
             if room.phase == "vote":
                 if P.now() >= room.vote_ends or room.all_voted():
                     chosen, counts = room.resolve_vote()

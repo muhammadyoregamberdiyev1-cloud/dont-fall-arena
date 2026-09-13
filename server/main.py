@@ -206,7 +206,7 @@ class Connection:
         else:
             pid = P.make_player_id()
             token = P.new_token()
-            self.player = manager.register(pid, info["name"], self.send, token)
+            self.player = manager.register(pid, info["name"], self.send, token, info["pid"])
             self.player.conn = self
             await self.send(
                 {
@@ -461,6 +461,7 @@ class Server:
                 await conn.send({"t": P.ERROR, "msg": err, "key": err})
                 return
             p.vote = info["arena"]  # duplicate votes replace, never add
+            room.votes[p.id] = info["arena"]
             # host may submit exactly one vote per reserved bot seat
             if info["bots"] and p.id == room.host_id and not room.ranked:
                 seats = {str(b["slot"]) for b in room.bots}

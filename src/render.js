@@ -343,6 +343,7 @@ export class Renderer {
 
     ctx.save();
     ctx.translate(this.w / 2 + this.cam.shakeX - this.cam.x * this.cam.scale, this.h / 2 + this.cam.shakeY - this.cam.y * this.cam.scale);
+    if (opts.yaw) ctx.rotate(-opts.yaw);
     ctx.scale(this.cam.scale, this.cam.scale);
 
     this.drawArena(ctx, arena, match);
@@ -778,6 +779,40 @@ export class Renderer {
       ctx.arc(fx * fwd + ex, fy * fwd + ey, 2.5, 0, TAU);
       ctx.arc(fx * fwd - ex, fy * fwd - ey, 2.5, 0, TAU);
       ctx.fill();
+
+      // emote bubble
+      if (p.emote && p.emoteT > 0) {
+        const ea = clamp(p.emoteT / 0.5, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = alpha * ea;
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.beginPath();
+        ctx.arc(0, -p.radius - 26, 15, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#101a33';
+        ctx.font = '15px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.emote, 0, -p.radius - 25);
+        ctx.restore();
+      }
+
+      // team badge (A/B) for team modes
+      if (match.teamMode && p.alive && (p.team === 0 || p.team === 1)) {
+        const bx = p.radius * 0.95;
+        const by = -p.radius * 0.95;
+        ctx.save();
+        ctx.fillStyle = p.team === 0 ? '#4dd0ff' : '#ff5d73';
+        ctx.beginPath();
+        ctx.arc(bx, by, 9, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#08101f';
+        ctx.font = '900 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.team === 0 ? 'A' : 'B', bx, by + 0.5);
+        ctx.restore();
+      }
 
       // dash cooldown ring
       if (p.alive && p.dashCd > 0) {
