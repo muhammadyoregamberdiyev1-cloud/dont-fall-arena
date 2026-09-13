@@ -4,6 +4,7 @@
  */
 
 import http from 'node:http';
+import net from 'node:net';
 import { readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -68,6 +69,35 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+/**
+ * /ws uchun tunnel: brauzer same-origin WebSocket ochadi, biz uni
+ * python relay-serveriga (127.0.0.1:RELAY_PORT) uzatamiz. Shunda preview
+ * proxy faqat bitta portni bilsa ham onlayn rejim ishlaydi.
+ */
+const RELAY_PORT = Number(process.env.ARENA_RELAY_PORT || 8081);
+const RELAY_HOST = process.env.ARENA_RELAY_HOST || '127.0.0.1';
+
+server.on('upgrade', (req, socket) => {
+  const head = `${req.method} ${req.url} HTTP/1.1\r\n` +
+    Object.entries(req.headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\r\n') + '\r\n\r\n';
+  const upstream = net.connect(RELAY_PORT, RELAY_HOST, () => {
+    upstream.write(head);
+    socket.pipe(upstream);
+    upstream.pipe(socket);
+  });
+  const bye = () => {
+    socket.destroy();
+    upstream.destroy();
+  };
+  socket.on('error', bye);
+  upstream.on('error', bye);
+  socket.on('close', bye);
+  upstream.on('close', bye);
+});
+
 server.listen(port, host, () => {
   console.log(`Don't Fall Arena → http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
+  console.log(`  /ws → ${RELAY_HOST}:${RELAY_PORT} (python relay: python3 server/main.py)`);
 });

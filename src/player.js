@@ -413,5 +413,5 @@ export function grantPowerup(p, type, arena, emit) {
       }
       break;
   }
-  if (emit) emit('powerup', { player: p, type, x: p.x, y: p.y, def });
+  if (emit) emit('powerup', { player: p, kind: type, x: p.x, y: p.y, def });
 }

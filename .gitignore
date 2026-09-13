@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 *.log
 tests/shots/
+server/*.db
+server/*.db-wal
+server/*.db-shm
+__pycache__/
+*.pyc

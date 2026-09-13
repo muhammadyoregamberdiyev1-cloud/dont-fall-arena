@@ -20,13 +20,16 @@ export class Renderer {
     this.floaters = [];
     this.rings = [];
     this.embers = [];
-    this.cam = { scale: 1, x: 0, y: 0, targetScale: 1, shakeX: 0, shakeY: 0 };
+    this.cam = { scale: 1, x: 0, y: 0, targetScale: 1, shakeX: 0, shakeY: 0, punch: 0 };
     this.time = 0;
     this.flash = 0;
     this.flashColor = '#ffffff';
     this.hueShift = 0;
     this.cornerCache = new Map();
     this.theme = null;
+    this.roundKey = null;
+    this.arenaRef = null;
+    this.roundAnim = 99;
     for (let i = 0; i < 90; i++) {
       this.embers.push({
         x: Math.random(),
@@ -144,6 +147,45 @@ export class Renderer {
     }
   }
 
+  spawnBeam(x, y, color) {
+    this.particles.push({ kind: 'beam', x, y, vx: 0, vy: 0, g: 0, life: 0.55, t: 0, size: 16, color });
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * TAU;
+      this.particles.push({
+        kind: 'spark',
+        x: x + Math.cos(a) * 10,
+        y: y + Math.sin(a) * 6,
+        vx: Math.cos(a) * 60,
+        vy: -120 - Math.random() * 140,
+        g: 60,
+        life: 0.5 + Math.random() * 0.3,
+        t: 0,
+        size: 1.6 + Math.random() * 1.6,
+        color,
+      });
+    }
+  }
+
+  spawnConfetti(n = 130) {
+    const colors = ['#ffd23f', '#ff5d73', '#5ad7ff', '#5dffa8', '#b47cff', '#ff9f45'];
+    for (let i = 0; i < n; i++) {
+      this.particles.push({
+        kind: 'confetti',
+        x: (Math.random() - 0.5) * this.w / Math.max(0.4, this.cam.scale),
+        y: -this.h / Math.max(0.4, this.cam.scale) * 0.6 - Math.random() * 200,
+        vx: (Math.random() - 0.5) * 90,
+        vy: 90 + Math.random() * 160,
+        g: 60,
+        life: 2.2 + Math.random() * 1.4,
+        t: 0,
+        size: 3 + Math.random() * 4,
+        rot: Math.random() * TAU,
+        vr: (Math.random() - 0.5) * 10,
+        color: colors[i % colors.length],
+      });
+    }
+  }
+
   spawnRing(x, y, color, r0 = 6, r1 = 90, life = 0.5, width = 4) {
     this.rings.push({ x, y, color, r0, r1, life, t: 0, width });
   }
@@ -175,6 +217,7 @@ export class Renderer {
           break;
         case 'collapse':
           this.cam.shake = 1.2;
+          this.cam.punch = 0.09;
           this.doFlash('#ff5d73', 0.3);
           this.spawnRing(0, 0, 'rgba(255,93,115,0.5)', arena.size * 1.5, arena.size * (arena.radius + 0.5) * 1.75, 0.7, 4);
           break;
@@ -208,7 +251,11 @@ export class Renderer {
         case 'powerup':
           this.spawnRing(e.x, e.y, hexToRgba(e.def.color, 0.9), 8, 96, 0.55, 4);
           this.spawnSpark(e.x, e.y, e.def.color, 20, 1);
-          this.spawnFloater(e.x, e.y - 34, e.def.label.toUpperCase(), e.def.color, 17, 1.1);
+          this.spawnBeam(e.x, e.y, e.def.color);
+          this.spawnFloater(e.x, e.y - 34, (e.label || e.def.label).toUpperCase(), e.def.color, 17, 1.1);
+          break;
+        case 'land':
+          this.spawnDust(e.x, e.y + 8, 'rgba(255,255,255,0.45)', 7, 0.8);
           break;
         case 'powerupSpawn':
           this.spawnRing(e.x, e.y, hexToRgba(POWERUPS[e.type].color, 0.6), 4, 40, 0.4, 2);
@@ -241,7 +288,17 @@ export class Renderer {
     const worldH = arena.size * 1.5 * zoomRing * 2 + ARENA.depth * 3;
     const pad = Math.min(this.w, this.h) < 620 ? 1.04 : 1.08;
     this.cam.targetScale = Math.min(this.w / (worldW * pad), this.h / (worldH * pad));
-    this.cam.scale = lerp(this.cam.scale, this.cam.targetScale, 1 - Math.exp(-3 * dt));
+    this.cam.punch = Math.max(0, (this.cam.punch || 0) - dt * 0.35);
+    this.cam.scale = lerp(this.cam.scale, this.cam.targetScale * (1 + this.cam.punch), 1 - Math.exp(-3 * dt));
+
+    // tiles materialise ring-by-ring at the start of every round
+    const rkey = match.round + '/' + arena.list.length;
+    if (rkey !== this.roundKey || this.arenaRef !== arena) {
+      this.roundKey = rkey;
+      this.arenaRef = arena;
+      this.roundAnim = 0;
+    }
+    this.roundAnim += dt;
 
     const shake = Math.max(match.shake || 0, this.cam.shake || 0);
     this.cam.shake = Math.max(0, (this.cam.shake || 0) - dt * 3);
@@ -352,16 +409,18 @@ export class Renderer {
     const ordered = tiles.slice().sort((a, b) => a.r - b.r || a.q - b.q);
     for (const t of ordered) {
       if (t.state === TILE.GONE) continue;
-      this.drawTile(ctx, t, size, depth, arena);
+      const k = clamp(this.roundAnim * 2.4 - t.d * 0.13, 0, 1);
+      if (k <= 0.001) continue;
+      this.drawTile(ctx, t, size, depth, arena, k);
     }
   }
 
-  drawTile(ctx, t, size, depth, arena) {
+  drawTile(ctx, t, size, depth, arena, spawn = 1) {
     const mat = this.tileColors(t);
     const wob = Math.sin(t.wobbleT) * t.wobble * 2.2;
-    let scale = 1;
-    let drop = 0;
-    let alpha = 1;
+    let scale = spawn < 1 ? easeOutBack(spawn) : 1;
+    let drop = spawn < 1 ? (1 - spawn) * size * 1.4 : 0;
+    let alpha = spawn < 1 ? spawn : 1;
 
     if (t.state === TILE.FALLING) {
       const p = clamp(t.fallT / mat.fallTime, 0, 1);
@@ -594,7 +653,16 @@ export class Renderer {
 
       ctx.translate(px, py);
       if (!p.alive || sink > 0) ctx.rotate(sink * 5 + deadT * 3);
-      ctx.scale(scale, scale);
+      // squash & stretch along the movement direction
+      const spd = Math.hypot(p.vx || 0, p.vy || 0);
+      const stretch = p.alive ? clamp(spd / 900, 0, 0.3) : 0;
+      if (stretch > 0.01) {
+        ctx.rotate(p.facing);
+        ctx.scale(scale * (1 + stretch), scale * (1 - stretch * 0.55));
+        ctx.rotate(-p.facing);
+      } else {
+        ctx.scale(scale, scale);
+      }
 
       // body
       const bg = ctx.createRadialGradient(-p.radius * 0.35, -p.radius * 0.45, p.radius * 0.15, 0, 0, p.radius * 1.25);
@@ -698,11 +766,26 @@ export class Renderer {
       p.vy += (p.g || 0) * dt;
       p.vx *= Math.exp(-1.6 * dt);
       const a = 1 - p.t / p.life;
-      const over = p.kind === 'spark' || p.kind === 'shard';
+      const over = p.kind === 'spark' || p.kind === 'shard' || p.kind === 'confetti' || p.kind === 'beam';
       if ((layer === 'over') !== over) continue;
       ctx.save();
       ctx.globalAlpha = a;
-      if (p.kind === 'shard') {
+      if (p.kind === 'confetti') {
+        p.rot += p.vr * dt;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      } else if (p.kind === 'beam') {
+        const k = p.t / p.life;
+        const hgt = 150 * (1 - k * 0.3);
+        const g2 = ctx.createLinearGradient(p.x, p.y, p.x, p.y - hgt);
+        g2.addColorStop(0, p.color);
+        g2.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.globalAlpha = (1 - k) * 0.7;
+        ctx.fillStyle = g2;
+        ctx.fillRect(p.x - p.size * (1 - k * 0.5) / 2, p.y - hgt, p.size * (1 - k * 0.5), hgt);
+      } else if (p.kind === 'shard') {
         p.rot += p.vr * dt;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rot);
@@ -823,6 +906,12 @@ function mix(hex, target, amount) {
   const g = Math.round(lerp((n >> 8) & 255, target, amount));
   const b = Math.round(lerp(n & 255, target, amount));
   return `rgb(${r},${g},${b})`;
+}
+
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
 export const lighten = (hex, a) => mix(hex, 255, a);

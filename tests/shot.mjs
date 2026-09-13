@@ -94,6 +94,7 @@ if (!game) throw new Error('game did not boot');
 const canvasEl = win.document.getElementById('game');
 canvasEl.getBoundingClientRect = () => ({ width: W, height: H, left: 0, top: 0, right: W, bottom: H, x: 0, y: 0 });
 game.renderer.resize();
+syncBacking(canvasEl); // align backing size BEFORE the first frames (resize clears it)
 
 function shot(name) {
   const c = syncBacking(canvasEl);

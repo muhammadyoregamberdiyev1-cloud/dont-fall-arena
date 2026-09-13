@@ -177,6 +177,16 @@ ok(doc.querySelectorAll('#menuRoot .stat-pill').length === 5, 'stat pills render
 ok(!!doc.querySelector('#menuRoot .season'), 'season banner rendered');
 ok(doc.querySelectorAll('#menuRoot .card').length === 7, 'card grid rendered');
 
+console.log('online screen');
+const clickEv = () => new win.MouseEvent('click', { bubbles: true });
+doc.querySelector('[data-act="goto-online"]').dispatchEvent(clickEv());
+ok(!!doc.querySelector('[data-act="net-connect"]'), 'online screen shows the connect button');
+doc.querySelector('[data-act="net-connect"]').dispatchEvent(clickEv());
+frames(3);
+ok(!!doc.querySelector('#menuRoot .net-status'), 'net status pill rendered (no WebSocket in jsdom → graceful fail)');
+doc.querySelector('[data-act="back"]').dispatchEvent(clickEv());
+ok(!!doc.querySelector('[data-act="goto-online"]'), 'back returns home');
+
 console.log('daily bonus claim');
 const xpBefore = game.profile.data.xp;
 doc.querySelector('[data-act="goto-daily"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));

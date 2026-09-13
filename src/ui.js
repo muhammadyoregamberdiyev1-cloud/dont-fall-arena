@@ -16,6 +16,7 @@ const I18N = {
     level: 'Daraja',
     season: 'Mavsum',
     endsIn: 'tugaydi',
+    playOnline: 'ONLAYN O‘YNASH',
     playBots: 'BOTLAR BILAN O‘YNASH',
     playTwo: '2 O‘YINCHI · BIR KLAVIATURA',
     gift: 'Taklif',
@@ -124,6 +125,30 @@ const I18N = {
     pw_speed: 'Chaqqonlik',
     pw_phantom: 'Arvoh',
     pw_titan: 'Titan',
+    netOff: 'Serverga ulanmagan',
+    netConnecting: 'Ulanmoqda…',
+    netLobby: 'Onlayn lobbi',
+    netPlaying: 'O‘yin davom etmoqda',
+    connect: 'ULANISH',
+    disconnect: 'UZISH',
+    createRoom: 'XONA YARATISH',
+    joinRoom: 'QO‘SHILISH',
+    roomCode: 'Xona kodi',
+    roomsList: 'Ochiq xonalar',
+    refresh: 'Yangilash',
+    roster: 'O‘yinchilar',
+    hostTag: 'HOST',
+    slotEmpty: 'bo‘sh',
+    startOnline: 'O‘YINNI BOSHLASH',
+    leaveRoom: 'XONADAN CHIQISH',
+    chatPh: 'Xabar yozing…',
+    onlineNote: 'Onlayn rejimda xona host’i simulyatsiyani o‘z brauzerida yuritadi, qolganlar real vaqtda ulanadi. XP/RP hisoblanadi.',
+    youHost: 'Siz HOST siz — o‘yinni siz boshlaysiz',
+    youGuest: 'Host boshlashini kuting…',
+    noRooms: 'Hozircha ochiq xona yo‘q — o‘zingiz yarating!',
+    chat: 'Chat',
+    waitHost: 'Host yangi o‘yinni boshlashini kuting…',
+    hostLeft: 'Host o‘yindan chiqdi — xona tugadi',
     how_rules: 'Qoidalar',
     how_rules_body:
       'Plita ustida tursangiz u yoriladi. Halqa torayadi. Oxirgi turgan raundni yutadi; kerakli raundlar sonigacha yutgan — match g‘olibi.',
@@ -136,6 +161,7 @@ const I18N = {
     level: 'Level',
     season: 'Season',
     endsIn: 'ends in',
+    playOnline: 'PLAY ONLINE',
     playBots: 'PLAY WITH BOTS',
     playTwo: '2 PLAYERS · ONE KEYBOARD',
     gift: 'Gift',
@@ -244,6 +270,30 @@ const I18N = {
     pw_speed: 'Swift',
     pw_phantom: 'Phantom',
     pw_titan: 'Titan',
+    netOff: 'Not connected',
+    netConnecting: 'Connecting…',
+    netLobby: 'Online lobby',
+    netPlaying: 'Match in progress',
+    connect: 'CONNECT',
+    disconnect: 'DISCONNECT',
+    createRoom: 'CREATE ROOM',
+    joinRoom: 'JOIN',
+    roomCode: 'Room code',
+    roomsList: 'Open rooms',
+    refresh: 'Refresh',
+    roster: 'Players',
+    hostTag: 'HOST',
+    slotEmpty: 'empty',
+    startOnline: 'START MATCH',
+    leaveRoom: 'LEAVE ROOM',
+    chatPh: 'Type a message…',
+    onlineNote: 'Online: the room host runs the simulation in their browser, others join in real time. XP/RP still count.',
+    youHost: 'You are the HOST — you start the match',
+    youGuest: 'Waiting for the host to start…',
+    noRooms: 'No open rooms yet — create one!',
+    chat: 'Chat',
+    waitHost: 'Waiting for the host to start a new match…',
+    hostLeft: 'The host left — the room is closed',
     how_rules: 'Rules',
     how_rules_body:
       'Standing on a tile cracks it. The ring shrinks. Last one standing wins the round; first to the target round wins wins the match.',
@@ -346,6 +396,12 @@ export class UI {
     this.resetArmed = false;
 
     this.el.menuRoot.addEventListener('click', (e) => this.onMenuClick(e));
+    this.el.menuRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.id === 'netChatInput') {
+        e.stopPropagation();
+        this.onMenuClick({ target: this.el.menuRoot.querySelector('[data-act="net-chat"]') || e.target });
+      }
+    });
     this.el.btnRematch.addEventListener('click', () => this.fire('rematch'));
     this.el.btnMenu.addEventListener('click', () => this.fire('menu'));
     this.el.btnResume.addEventListener('click', () => this.fire('resume'));
@@ -477,8 +533,8 @@ export class UI {
         <h1 class="m-title">DON'T FALL!</h1>
         <p class="m-sub">${escapeHtml(this.t('tagline'))}</p>
         ${this.statRow()}
-        <button class="big-btn green" data-act="setup-bots"><span>🌐</span>${escapeHtml(this.t('playBots'))}</button>
-        <button class="big-btn blue" data-act="setup-two"><span>👥</span>${escapeHtml(this.t('playTwo'))}</button>
+        <button class="big-btn green" data-act="goto-online"><span>🌐</span>${escapeHtml(this.t('playOnline'))}</button>
+        <button class="big-btn blue" data-act="setup-bots"><span>🤖</span>${escapeHtml(this.t('playBots'))}</button>
         <div class="card-row four">
           <button class="card c-green ${bonusReady ? '' : 'done'}" data-act="claim-bonus">
             <span class="em">🎁</span>${escapeHtml(this.t('gift'))}<span class="sub">+100 XP</span>
@@ -495,6 +551,65 @@ export class UI {
           <button class="card c-purple" data-act="goto-profile"><span class="em">👤</span>${escapeHtml(this.t('profile'))}</button>
           <button class="card c-violet" data-act="goto-skins"><span class="em">👕</span>${escapeHtml(this.t('skins'))}</button>
         </div>
+        ${this.footRow()}`;
+    } else if (this.screen === 'online') {
+      const net = this.netRef;
+      const st = net ? net.state : 'off';
+      const slots = Array.from({ length: 8 }, (_, i) => {
+        const r = net ? net.roster.find((x) => x.slot === i) : null;
+        const color = r ? ['#ff5d73', '#4dd0ff', '#ffd23f', '#b47cff', '#5dffa8', '#ff9f45', '#ff6fe0', '#e8ff5d'][i % 8] : '';
+        return r
+          ? `<div class="slot filled" style="border-color:${color}55">
+               <span class="sdot" style="background:${color};box-shadow:0 0 8px ${color}"></span>
+               <span class="sname">${escapeHtml(r.name)}${r.id === net.id ? ' (' + escapeHtml(this.t('youLow')) + ')' : ''}</span>
+               ${r.id === net.hostId ? `<span class="stag">${escapeHtml(this.t('hostTag'))}</span>` : ''}
+             </div>`
+          : `<div class="slot"><span class="sname dim">${i < 2 ? '' : ''}${escapeHtml(this.t('slotEmpty'))}</span></div>`;
+      }).join('');
+      const rooms = (this.netRoomsList || [])
+        .map(
+          (r) => `<div class="list-row">
+            <div class="ico" style="font:900 13px var(--mono);color:var(--gold)">${escapeHtml(r.code)}</div>
+            <div class="body"><div class="t1">${escapeHtml(r.host)}</div><div class="t2">${r.players}/${r.max} • ${r.playing ? '▶' : '…'}</div></div>
+            <button class="mini-btn" data-act="join-room:${r.code}" ${r.playing || r.players >= r.max ? 'disabled' : ''}>${escapeHtml(this.t('joinRoom'))}</button>
+          </div>`
+        )
+        .join('') || `<p class="note">${escapeHtml(this.t('noRooms'))}</p>`;
+      const chat = (net ? net.chat : [])
+        .slice(-8)
+        .map((c) => `<div class="chat-line"><b>${escapeHtml(c.name)}:</b> ${escapeHtml(c.text)}</div>`)
+        .join('');
+      body = `
+        ${this.statRow()}
+        <button class="back-btn" data-act="back">◀ ${escapeHtml(this.t('back'))}</button>
+        <div class="net-status ${st}"><span class="ndot"></span>${escapeHtml(this.t(st === 'off' ? 'netOff' : st === 'connecting' ? 'netConnecting' : st === 'playing' ? 'netPlaying' : 'netLobby'))}${net && net.error ? ` <span class="nerr">• ${escapeHtml(net.error)}</span>` : ''}</div>
+        ${st === 'off' || st === 'connecting' ? `
+          <button class="big-btn green" data-act="net-connect"><span>🌐</span>${escapeHtml(this.t('connect'))}</button>
+          <p class="note">${escapeHtml(this.t('onlineNote'))}</p>` : ''}
+        ${st === 'lobby' && net && !net.room ? `
+          <button class="big-btn green" data-act="net-create"><span>🛠</span>${escapeHtml(this.t('createRoom'))}</button>
+          <div class="field">
+            <input id="netCode" maxlength="4" placeholder="${escapeHtml(this.t('roomCode'))}" style="text-transform:uppercase;letter-spacing:.2em" />
+            <button class="mini-btn" data-act="net-join">${escapeHtml(this.t('joinRoom'))}</button>
+          </div>
+          <h4 style="color:var(--gold);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:10px 2px 4px">${escapeHtml(this.t('roomsList'))}</h4>
+          <div class="list">${rooms}</div>
+          <button class="ghost" data-act="net-refresh" style="width:100%">↻ ${escapeHtml(this.t('refresh'))}</button>
+          <button class="ghost" data-act="net-disconnect" style="width:100%;margin-top:6px">${escapeHtml(this.t('disconnect'))}</button>` : ''}
+        ${st === 'lobby' && net && net.room ? `
+          <div class="rank-strip">🔑 ${escapeHtml(net.room)} • ${escapeHtml(this.t('roster'))} ${net.roster.length}/8</div>
+          <div class="slot-grid">${slots}</div>
+          <p class="note">${escapeHtml(net.role === 'host' ? this.t('youHost') : this.t('youGuest'))}</p>
+          ${net.role === 'host' ? `<button class="big-btn green" data-act="net-start" ${net.roster.length < 2 ? 'disabled' : ''}><span>▶</span>${escapeHtml(this.t('startOnline'))}</button>` : ''}
+          <div class="chat-log">${chat}</div>
+          <div class="field">
+            <input id="netChatInput" maxlength="140" placeholder="${escapeHtml(this.t('chatPh'))}" />
+            <button class="mini-btn" data-act="net-chat">➤</button>
+          </div>
+          <button class="ghost" data-act="net-leave" style="width:100%">◀ ${escapeHtml(this.t('leaveRoom'))}</button>` : ''}
+        ${st === 'playing' ? `
+          <p class="note">${escapeHtml(this.t('netPlaying'))}</p>
+          <button class="ghost" data-act="net-leave" style="width:100%">${escapeHtml(this.t('leaveRoom'))}</button>` : ''}
         ${this.footRow()}`;
     } else if (this.screen === 'setup') {
       const o = this.opts;
@@ -694,6 +809,46 @@ export class UI {
     this.fire('click');
     const p = this.profile;
     switch (name) {
+      case 'goto-online':
+        this.goto('online');
+        if (this.netRef && this.netRef.connected) this.netRef.refreshRooms();
+        break;
+      case 'net-connect':
+        this.fire('net-connect');
+        break;
+      case 'net-create':
+        this.fire('net-create');
+        break;
+      case 'net-join': {
+        const inp = this.el.menuRoot.querySelector('#netCode');
+        const code = (inp ? inp.value : '').trim().toUpperCase();
+        if (code) this.fire('net-join', code);
+        break;
+      }
+      case 'join-room':
+        this.fire('net-join', arg);
+        break;
+      case 'net-refresh':
+        this.fire('net-refresh');
+        break;
+      case 'net-disconnect':
+        this.fire('net-disconnect');
+        break;
+      case 'net-leave':
+        this.fire('net-leave');
+        break;
+      case 'net-start':
+        this.fire('net-start');
+        break;
+      case 'net-chat': {
+        const inp = this.el.menuRoot.querySelector('#netChatInput');
+        const text = (inp ? inp.value : '').trim();
+        if (text) {
+          this.fire('net-chat', text);
+          inp.value = '';
+        }
+        break;
+      }
       case 'setup-bots':
         this.opts.entry = 'bots';
         this.opts.two = false;
@@ -830,6 +985,26 @@ export class UI {
       default:
         break;
     }
+  }
+
+  /* ---------------------------------------------------------- online bits */
+
+  setNet(net) {
+    this.netRef = net;
+    if (this.current === 'menu' && this.screen === 'online') this.renderMenu();
+  }
+
+  setNetRooms(list) {
+    this.netRoomsList = list;
+    if (this.current === 'menu' && this.screen === 'online' && !(this.netRef && this.netRef.room)) this.renderMenu();
+  }
+
+  setNetRoster() {
+    if (this.current === 'menu' && this.screen === 'online') this.renderMenu();
+  }
+
+  netChatLine() {
+    if (this.current === 'menu' && this.screen === 'online' && this.netRef && this.netRef.room) this.renderMenu();
   }
 
   setSoundIcon(on) {

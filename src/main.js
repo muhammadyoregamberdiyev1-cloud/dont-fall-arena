@@ -9,7 +9,8 @@ import { Sfx } from './audio.js?v=20260913';
 import { Input } from './input.js?v=20260913';
 import { UI } from './ui.js?v=20260913';
 import { Profile } from './profile.js?v=20260913';
-import { ARENA, POWERUPS, THEMES, SKINS } from './config.js?v=20260913';
+import { ARENA, POWERUPS, THEMES, SKINS, PALETTE } from './config.js?v=20260913';
+import { Net, NET_STATE } from './net.js?v=20260913';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 5;
@@ -22,6 +23,12 @@ class Game {
     this.input = new Input(this.canvas);
     this.profile = new Profile();
     this.ui = new UI(this.profile);
+    this.net = new Net();
+    this.ui.netRef = this.net;
+    this.netRoomsList = [];
+    this.netEvents = [];
+    this.hitStop = 0;
+    this.matchStartedAt = 0;
 
     this.match = null;
     this.attract = null;
@@ -37,7 +44,17 @@ class Game {
     this.renderer.setTheme(this.profile.theme());
 
     this.ui.on('start', () => this.startMatch());
-    this.ui.on('rematch', () => this.startMatch());
+    this.ui.on('rematch', () => {
+      const role = this.netRole();
+      if (role === 'host') {
+        // xona ichida qayta o'yin: server room_start ni hammaga (host'ga ham) qaytaradi
+        this.net.startMatch({ ...(this.onlineCfg || {}), seed: (Math.random() * 1e9) | 0 });
+      } else if (role === 'guest') {
+        this.ui.toast(this.ui.t('waitHost'), '#ffd23f', 2200);
+      } else {
+        this.startMatch();
+      }
+    });
     this.ui.on('menu', () => this.toMenu());
     this.ui.on('resume', () => this.resume());
     this.ui.on('restart', () => this.startMatch());
@@ -55,6 +72,35 @@ class Game {
     this.ui.on('music', (v) => this.sfx.setMusicEnabled(v));
     this.ui.on('theme', (th) => this.renderer.setTheme(th));
     this.ui.on('xp', (g) => this.onXp(g));
+    this.bindNet();
+
+    this.ui.on('net-connect', () => {
+      this.sfx.unlock();
+      this.net.connect(this.profile.data.name);
+    });
+    this.ui.on('net-create', () => this.net.create());
+    this.ui.on('net-join', (code) => this.net.join(code));
+    this.ui.on('net-leave', () => {
+      if (this.state === 'playing' || this.state === 'roundEnd' || this.state === 'over') {
+        this.match = null;
+        this.state = 'menu';
+      }
+      this.net.leaveRoom();
+      this.ui.goto('online');
+    });
+    this.ui.on('net-start', () => {
+      const seats = this.net.roster.length;
+      this.net.startMatch({
+        seed: Math.floor(Math.random() * 1e9),
+        arenaRadius: seats <= 2 ? 5 : seats <= 4 ? 6 : 7,
+        roundsToWin: 3,
+        difficulty: 'normal',
+      });
+    });
+    this.ui.on('net-chat', (text) => this.net.chatSend(text));
+    this.ui.on('net-refresh', () => this.net.refreshRooms());
+    this.ui.on('net-disconnect', () => this.net.disconnect());
+
     this.ui.on('reset', () => {
       this.renderer.setTheme(this.profile.theme());
       this.sfx.setEnabled(this.profile.data.sound);
@@ -79,6 +125,112 @@ class Game {
     requestAnimationFrame(this.loop);
   }
 
+  /* ------------------------------------------------------------ online io */
+
+  bindNet() {
+    const net = this.net;
+    net.on('status', () => this.ui.setNet(net));
+    net.on('rooms', (rooms) => this.ui.setNetRooms(rooms));
+    net.on('roster', () => this.ui.setNetRoster(net.roster, net.mySlot, net.role));
+    net.on('chat', (m) => this.ui.netChatLine(m));
+    net.on('error', (msg) => this.ui.toast('⚠ ' + msg, '#ff8a94', 2200));
+    net.on('hostleft', () => {
+      this.match = null;
+      this.state = 'menu';
+      this.net.leaveRoom();
+      this.ui.toast(this.ui.t('hostLeft'), '#ff8a94', 3200);
+      this.ui.goto('online');
+    });
+    net.on('peer', () => this.sfx.play('hover'));
+    net.on('rstart', (cfg) => this.beginOnline(cfg));
+    net.on('start', (msg) => this.beginOnline(msg.cfg, msg.roster));
+    net.on('snap', (d) => {
+      if (this.netRole() !== 'guest') return;
+      for (const e of this.net.guest.applySnap(d)) this.netEvents.push(e);
+    });
+    net.on('ev', (d) => {
+      if (this.netRole() !== 'guest') return;
+      for (const e of this.net.guest.applyEv(d)) this.netEvents.push(e);
+    });
+  }
+
+  netRole() {
+    return this.net.state === NET_STATE.PLAYING ? this.net.role : null;
+  }
+
+  onlineRoster() {
+    return this.net.roster.map((r) => ({ ...r, color: PALETTE[r.slot % PALETTE.length] }));
+  }
+
+  /** Both sides: (re)build the online match. Host runs the sim, guest renders a view. */
+  beginOnline(cfg, rosterOverride) {
+    this.onlineCfg = cfg;
+    const roster = rosterOverride ? rosterOverride.map((r) => ({ ...r, color: PALETTE[r.slot % PALETTE.length] })) : this.onlineRoster();
+    this.matchStartedAt = performance.now();
+    if (this.net.role === 'host') {
+      this.match = new Match({
+        seed: cfg.seed || 1,
+        humans: roster.length,
+        bots: 0,
+        difficulty: cfg.difficulty || 'normal',
+        arenaRadius: cfg.arenaRadius || 6,
+        roundsToWin: cfg.roundsToWin || 3,
+        maxRounds: (cfg.roundsToWin || 3) * 2 + 1,
+        roundTime: ARENA.roundTime,
+        netRoster: roster.map((r) => ({ name: r.name, color: r.color, slot: r.slot, isLocal: r.id === this.net.id })),
+      });
+      this.net.host.reset(this.match);
+    } else {
+      this.match = this.net.guest.startRound(cfg, roster, this.net.mySlot);
+    }
+    this.attract = null;
+    this.state = 'playing';
+    this.netEvents.length = 0;
+    this.ui.buildChips(this.match.players, this.match.opts.roundsToWin);
+    this.ui.clearFeed();
+    this.ui.show('hud');
+    this.ui.el.hint.textContent = this.ui.t('hint1');
+  }
+
+  handleNetEvents(list) {
+    for (const e of list) {
+      if (e.type === 'roundEnd') {
+        this.sfx.play('roundEnd');
+        this.ui.showRoundEnd(e.data, this.match);
+        this.state = 'roundEnd';
+        continue;
+      }
+      if (e.type === 'matchEnd') {
+        this.sfx.play('matchEnd');
+        this.renderer.spawnConfetti();
+        this.guestFinish();
+        continue;
+      }
+      this.handleEvents([e]);
+    }
+  }
+
+  guestFinish() {
+    const v = this.match;
+    const me = v.players.find((p) => p.isLocal);
+    const won = !!v.matchWinner && me && v.matchWinner.netSlot === me.netSlot;
+    const gains = this.profile.recordMatch({
+      won,
+      roundWins: me ? me.wins : 0,
+      points: me ? me.points : 0,
+      eliminations: 0,
+      powerups: 0,
+      falls: 0,
+      survived: won ? 1 : 0,
+      bestRoundTime: 0,
+      time: Math.round((performance.now() - this.matchStartedAt) / 1000),
+      difficulty: 'online',
+    });
+    this.state = 'over';
+    this.ui.showMatchEnd(v, gains);
+    if (gains.after > gains.before) this.announceLevel(gains.before, gains.after);
+  }
+
   /* ---------------------------------------------------------------- modes */
 
   startAttract() {
@@ -96,6 +248,7 @@ class Game {
   toMenu() {
     this.state = 'menu';
     this.match = null;
+    if (this.net.state === NET_STATE.PLAYING) this.net.leaveRoom();
     if (!this.attract || this.attract.state === ROUND_STATE.MATCH_END) this.startAttract();
     this.ui.goto('home');
     this.ui.show('menu');
@@ -223,23 +376,57 @@ class Game {
 
     const inputs = this.input.sample(rawDt);
     const live = this.state !== 'paused';
+    const role = this.netRole();
+
+    // ---- online guest: no local simulation, just interpolate + send input
+    if (role === 'guest' && this.match) {
+      if (live) {
+        const local = inputs.get(0) || { mx: 0, my: 0, dash: false };
+        this.net.sendInput(local, rawDt);
+        this.net.guest.interpolate(rawDt);
+        if (this.netEvents.length) {
+          const list = this.netEvents;
+          this.netEvents = [];
+          this.handleNetEvents(list);
+        }
+      }
+      const meG = this.match.players.find((p) => p.isLocal);
+      this.renderer.draw(this.match, rawDt, { focus: meG && meG.alive ? meG : null });
+      if (this.state === 'playing') this.ui.updateHud(this.match, rawDt);
+      this.updateTouchStick();
+      return;
+    }
 
     if (live) {
+      if (this.hitStop > 0) {
+        this.hitStop -= rawDt;
+        this.renderer.draw(this.match, rawDt, { focus: this.match.players.find((p) => !p.isBot) });
+        return;
+      }
       this.acc += rawDt;
       let steps = 0;
       while (this.acc >= STEP && steps < MAX_STEPS) {
         const map = new Map();
         for (const p of this.match.players) {
           if (p.isBot) continue;
-          const raw = inputs.get(p.controls) || { mx: 0, my: 0, dash: false };
+          let raw;
+          if (p.isLocal) raw = inputs.get(p.controls) || { mx: 0, my: 0, dash: false };
+          else raw = this.net.inputFor(p.netSlot);
           map.set(p.id, steps === 0 ? raw : { mx: raw.mx, my: raw.my, dash: false });
         }
         this.match.update(STEP, map);
         this.acc -= STEP;
         steps++;
-        this.handleEvents(this.match.drainEvents());
+        const evs = this.match.drainEvents();
+        this.handleEvents(evs);
+        if (role === 'host') this.pendingHostEvents = (this.pendingHostEvents || []).concat(evs);
       }
       if (steps >= MAX_STEPS) this.acc = 0;
+      if (role === 'host') {
+        // remote players' inputs
+        this.net.host.tick(this.match, steps * STEP, this.pendingHostEvents || []);
+        this.pendingHostEvents = [];
+      }
     }
 
     const ring = this.match.arena.maxRing / Math.max(1, this.match.opts.arenaRadius);
@@ -299,6 +486,10 @@ class Game {
       switch (e.type) {
         case 'roundStart':
           this.state = 'playing';
+          if (this.netRole() === 'host') {
+            this.net.host.reset(match);
+            this.net.send({ t: 'rstart', d: this.net.host.roundMessage(match) });
+          }
           this.ui.show('hud');
           this.ui.buildChips(match.players, match.opts.roundsToWin);
           this.ui.clearFeed();
@@ -333,6 +524,7 @@ class Game {
           break;
         case 'bump':
           this.sfx.play('bump');
+          this.hitStop = Math.max(this.hitStop, 0.045);
           break;
         case 'slip':
           if (this.isHuman(e.player)) this.sfx.play('slip');
@@ -348,6 +540,7 @@ class Game {
           break;
         case 'fell': {
           this.sfx.play('fell');
+          this.hitStop = Math.max(this.hitStop, 0.07);
           const human = this.isHuman(e.player);
           this.ui.feed(human ? t('feedYouFell', { name: this.esc(e.player.name), c: e.player.color }) : t('feedFell', { name: this.esc(e.player.name), c: e.player.color }));
           if (human) this.ui.toast(t('tYouFell'), '#ff5d73', 2200);
@@ -363,8 +556,9 @@ class Game {
         }
         case 'powerup': {
           this.sfx.play('powerup');
-          const def = POWERUPS[e.type] || e.def;
-          const label = this.ui.pwName(e.type);
+          const key = e.kind || e.type;
+          const def = POWERUPS[key] || e.def;
+          const label = this.ui.pwName(key);
           if (this.isHuman(e.player)) this.ui.toast(`${def.icon} ${label.toUpperCase()}!`, def.color, 1400);
           else this.ui.feed(t('feedPower', { name: this.esc(e.player.name), c: e.player.color, p: label }));
           break;
@@ -396,6 +590,12 @@ class Game {
 
   /** Persist the match into the meta layer and show the results. */
   finishMatch(match) {
+    this.renderer.spawnConfetti();
+    if (this.netRole() === 'host') {
+      this.net.reportResult(
+        match.standings().map((p, i) => ({ name: p.name, wins: p.wins, place: i + 1, roundWins: p.wins }))
+      );
+    }
     const humans = match.players.filter((p) => !p.isBot);
     const sum = (f) => humans.reduce((a, p) => a + f(p), 0);
     const summary = {

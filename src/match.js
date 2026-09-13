@@ -56,7 +56,23 @@ export class Match {
 
   buildRoster() {
     const names = this.rng.shuffle(BOT_NAMES.slice());
+    if (this.opts.netRoster) {
+      for (const r of this.opts.netRoster) {
+        const p = createPlayer({
+          name: r.name,
+          color: r.color,
+          isBot: false,
+          isLocal: !!r.isLocal,
+          controls: r.isLocal ? 0 : null,
+        });
+        p.netSlot = r.slot;
+        this.players.push(p);
+      }
+      this.total = this.players.length;
+      return;
+    }
     const total = this.opts.humans + this.opts.bots;
+    const names2 = names;
     let nameIdx = 0;
     for (let i = 0; i < this.opts.humans; i++) {
       const cols = this.opts.humanColors;
@@ -74,7 +90,7 @@ export class Match {
       const idx = this.opts.humans + i;
       this.players.push(
         createPlayer({
-          name: names[nameIdx++ % names.length],
+          name: names2[nameIdx++ % names2.length],
           color: PALETTE[idx % PALETTE.length],
           isBot: true,
           difficulty: this.opts.difficulty,
