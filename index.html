@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#070b18" />
+    <meta name="description" content="Don't Fall Arena — olti burchakli plitalar qulab tushadigan arenada oxirgi bo'lib qolish uchun kurashing." />
+    <title>Don't Fall Arena</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpolygon points='32,4 56,18 56,46 32,60 8,46 8,18' fill='%2339d98a' stroke='%2304121a' stroke-width='4'/%3E%3Cpolygon points='32,20 44,27 44,41 32,48 20,41 20,27' fill='%2304121a'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <!-- ============================================================ HUD -->
+      <div id="hud" class="hud hidden">
+        <div class="hud-top">
+          <div class="pill" id="hudRound">RAUND 1</div>
+          <div class="timer" id="hudTimer">1:20</div>
+          <div class="pill" id="hudAlive">4 TIRIK</div>
+        </div>
+
+        <div class="scores" id="hudScores"></div>
+
+        <div class="center-msg" id="hudMsg"><span></span></div>
+        <div class="sub-msg" id="hudSubMsg"><span></span></div>
+
+        <div class="hud-bottom">
+          <div class="dash-meter" id="dashMeter">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dm-bg" cx="22" cy="22" r="18" />
+              <circle class="dm-fg" id="dashRing" cx="22" cy="22" r="18" />
+            </svg>
+            <span>DASH</span>
+          </div>
+          <div class="effects" id="hudEffects"></div>
+          <div class="hint" id="hudHint">WASD — yurish · SPACE — sakrash · ESC — pauza</div>
+        </div>
+
+        <div class="killfeed" id="killfeed"></div>
+        <div class="toasts" id="toasts"></div>
+
+        <button class="icon-btn pause-btn" id="btnPause" title="Pauza (ESC)">❚❚</button>
+        <button class="icon-btn sound-btn" id="btnSound" title="Ovoz (M)">🔊</button>
+      </div>
+
+      <!-- touch controls -->
+      <div class="touch-ui hidden" id="touchUi">
+        <div class="stick" id="touchStick"><div class="knob" id="touchKnob"></div></div>
+        <button class="dash-btn" id="touchDash">SAKRA</button>
+      </div>
+
+      <!-- =========================================================== MENU -->
+      <div id="menu" class="screen">
+        <div class="panel menu-panel">
+          <div class="brand">
+            <div class="hex-badge" aria-hidden="true">
+              <svg viewBox="0 0 64 64"><polygon points="32,3 57,17.5 57,46.5 32,61 7,46.5 7,17.5" /></svg>
+            </div>
+            <h1 class="title">DON'T FALL<span>ARENA</span></h1>
+          </div>
+          <p class="tagline">
+            Olti burchakli plitalar ostingizda yorilib, qulab tushadi. Arena borgan sari torayadi.
+            <b>Oxirgi bo'lib qoling.</b>
+          </p>
+
+          <div class="opts">
+            <label class="opt">
+              <span class="opt-label">Ismingiz</span>
+              <input id="optName" class="text" type="text" maxlength="12" value="Siz" autocomplete="off" spellcheck="false" />
+            </label>
+
+            <div class="opt">
+              <span class="opt-label">Raqiblar</span>
+              <div class="seg" id="optBots" data-value="3">
+                <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button
+                ><button data-v="4">4</button><button data-v="5">5</button>
+              </div>
+            </div>
+
+            <div class="opt">
+              <span class="opt-label">Qiyinlik</span>
+              <div class="seg" id="optDiff" data-value="normal">
+                <button data-v="chill">Oson</button><button data-v="normal">O'rta</button
+                ><button data-v="spicy">Qiyin</button><button data-v="nightmare">Dahshat</button>
+              </div>
+            </div>
+
+            <div class="opt">
+              <span class="opt-label">Arena</span>
+              <div class="seg" id="optArena" data-value="6">
+                <button data-v="5">Kichik</button><button data-v="6">O'rta</button><button data-v="7">Katta</button>
+              </div>
+            </div>
+
+            <div class="opt">
+              <span class="opt-label">G'alabagacha raund</span>
+              <div class="seg" id="optRounds" data-value="3">
+                <button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button>
+              </div>
+            </div>
+
+            <div class="opt row">
+              <span class="opt-label">2 o'yinchi (bir klaviatura)</span>
+              <button class="toggle" id="optTwo" role="switch" aria-checked="false"><i></i></button>
+            </div>
+
+            <div class="opt row">
+              <span class="opt-label">Ovoz</span>
+              <button class="toggle on" id="optSound" role="switch" aria-checked="true"><i></i></button>
+            </div>
+          </div>
+
+          <button class="cta" id="btnStart">ARENA GA KIRISH</button>
+
+          <div class="howto">
+            <div class="howto-col">
+              <h3>Qanday o'ynaladi</h3>
+              <ul>
+                <li><b>Yuring</b> — plita ustida tursangiz, u asta-sekin yoriladi.</li>
+                <li><b>Sakrang (dash)</b> — 1–2 teshikdan o'tib ketasiz, havoda tushib qolgan bo'lsangiz ham qutqaradi.</li>
+                <li><b>Urish</b> — dash paytida raqibga urilsangiz, uni uzoqqa otadi.</li>
+                <li><b>Halqa torayadi</b> — qizil chiziqqa yondashmang.</li>
+              </ul>
+            </div>
+            <div class="howto-col">
+              <h3>Boshqaruv</h3>
+              <ul class="keys">
+                <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> yoki <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> — harakat</li>
+                <li><kbd>SPACE</kbd> / <kbd>SHIFT</kbd> — sakrash</li>
+                <li>2-o'yinchi: <kbd>↑↓←→</kbd> + <kbd>ENTER</kbd></li>
+                <li><kbd>ESC</kbd> pauza · <kbd>M</kbd> ovoz · <kbd>R</kbd> qayta</li>
+                <li>Telefonda: chap barmoq — joyistik, o'ng — sakrash</li>
+              </ul>
+              <h3>Kuchlar</h3>
+              <ul class="powers" id="powerList"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====================================================== ROUND END -->
+      <div id="roundEnd" class="screen hidden">
+        <div class="panel result-panel">
+          <h2 id="reTitle">RAUND TUGADI</h2>
+          <div class="results" id="reResults"></div>
+          <div class="standings" id="reStandings"></div>
+          <div class="re-next" id="reNext">Keyingi raund…</div>
+        </div>
+      </div>
+
+      <!-- ====================================================== MATCH END -->
+      <div id="matchEnd" class="screen hidden">
+        <div class="panel result-panel">
+          <div class="crown" id="meCrown">👑</div>
+          <h2 id="meTitle">CHEMPION</h2>
+          <p class="me-sub" id="meSub"></p>
+          <div class="standings big" id="meStandings"></div>
+          <div class="me-stats" id="meStats"></div>
+          <div class="btn-row">
+            <button class="cta small" id="btnRematch">QAYTA O'YNASH</button>
+            <button class="ghost" id="btnMenu">MENYU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================================================== PAUSE -->
+      <div id="pause" class="screen hidden">
+        <div class="panel pause-panel">
+          <h2>PAUZA</h2>
+          <div class="btn-col">
+            <button class="cta small" id="btnResume">DAVOM ETISH</button>
+            <button class="ghost" id="btnRestart">QAYTA BOSHLASH</button>
+            <button class="ghost" id="btnQuit">MENYUGA CHIQISH</button>
+          </div>
+          <div class="howto mini">
+            <h3>Eslatma</h3>
+            <ul>
+              <li>Sakrash (dash) teshikdan o'tishning yagona yo'li — uni tejab ishlatmang.</li>
+              <li>Muzli plitalarda tormoz yo'q: oldindan burilishni boshlang.</li>
+              <li>Po'lat plitalar uzoq chidaydi — xavfsiz orol.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
