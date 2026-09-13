@@ -26,6 +26,7 @@ export class Renderer {
     this.flashColor = '#ffffff';
     this.hueShift = 0;
     this.cornerCache = new Map();
+    this.theme = null;
     for (let i = 0; i < 90; i++) {
       this.embers.push({
         x: Math.random(),
@@ -44,6 +45,25 @@ export class Renderer {
     this.h = Math.max(240, rect.height);
     this.canvas.width = Math.floor(this.w * this.dpr);
     this.canvas.height = Math.floor(this.h * this.dpr);
+  }
+
+  /** Arena palette override for normal tiles (Kollektsiya unlocks). */
+  setTheme(theme) {
+    this.theme = theme || null;
+  }
+
+  tileColors(t) {
+    const base = MATERIALS[t.mat];
+    if (t.mat === MAT.NORMAL && this.theme) {
+      return {
+        ...base,
+        top: this.theme.top,
+        topAlt: this.theme.topAlt,
+        side: this.theme.side,
+        edge: this.theme.edge,
+      };
+    }
+    return base;
   }
 
   corners(size) {
@@ -337,7 +357,7 @@ export class Renderer {
   }
 
   drawTile(ctx, t, size, depth, arena) {
-    const mat = MATERIALS[t.mat];
+    const mat = this.tileColors(t);
     const wob = Math.sin(t.wobbleT) * t.wobble * 2.2;
     let scale = 1;
     let drop = 0;

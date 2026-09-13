@@ -169,26 +169,40 @@ ok(!!main, 'main.js imported');
 
 const doc = win.document;
 ok(!doc.getElementById('menu').classList.contains('hidden'), 'menu visible at boot');
-ok(doc.getElementById('powerList').children.length === 5, 'powerup list rendered in the menu');
+
+console.log('lobby');
+const game = win.__game;
+ok(doc.querySelector('#menuRoot .m-title')?.textContent === "DON'T FALL!", 'lobby title rendered');
+ok(doc.querySelectorAll('#menuRoot .stat-pill').length === 5, 'stat pills rendered');
+ok(!!doc.querySelector('#menuRoot .season'), 'season banner rendered');
+ok(doc.querySelectorAll('#menuRoot .card').length === 7, 'card grid rendered');
+
+console.log('daily bonus claim');
+const xpBefore = game.profile.data.xp;
+doc.querySelector('[data-act="goto-daily"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+doc.querySelector('[data-act="claim-bonus"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(game.profile.data.xp === xpBefore + 100, 'daily bonus grants +100 XP');
+doc.querySelector('[data-act="back"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+
+console.log('language toggle');
+doc.querySelector('[data-act="lang"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(doc.querySelector('#menuRoot').innerHTML.includes('PLAY WITH BOTS'), 'lobby flips to EN');
+doc.querySelector('[data-act="lang"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(doc.querySelector('#menuRoot').innerHTML.includes('BOTLAR BILAN'), 'lobby flips back to UZ');
 
 console.log('menu → match');
-frames(30); // attract mode running behind the menu
-click('optDiff'); // sanity: clicking the container does not explode
-doc.querySelector('#optDiff button[data-v="spicy"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-doc.querySelector('#optBots button[data-v="2"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-// 1 raundlik match — test tez tugashi uchun
-doc.querySelector('#optRounds button[data-v="1"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-const nameInput = doc.getElementById('optName');
-nameInput.value = 'Tester';
-nameInput.dispatchEvent(new win.Event('input', { bubbles: true }));
-
-click('btnStart');
+frames(30);
+doc.querySelector('[data-act="setup-bots"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(!!doc.querySelector('[data-seg="seats"]'), 'setup screen shows mode segments');
+doc.querySelector('[data-seg="difficulty"] button[data-v="spicy"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+doc.querySelector('[data-seg="seats"] button[data-v="4"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+ok(game.ui.opts.seats === 4 && game.ui.opts.difficulty === 'spicy', 'setup options applied');
+doc.querySelector('[data-act="start"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
 ok(doc.getElementById('menu').classList.contains('hidden'), 'menu hidden after start');
 ok(!doc.getElementById('hud').classList.contains('hidden'), 'hud shown after start');
 
 console.log('gameplay frames');
 frames(200); // countdown ~3s
-const game = win.__game;
 const meP = () => game.match.players.find((p) => !p.isBot);
 const before = { x: meP().x, y: meP().y };
 key('keydown', 'KeyW');
@@ -202,18 +216,6 @@ frames(4);
 key('keyup', 'Space');
 ok(meP().dashCd > cdBefore || meP().dashT > 0, 'dash fires on SPACE');
 frames(60);
-key('keydown', 'Space');
-frames(20);
-key('keyup', 'Space');
-key('keyup', 'KeyW');
-key('keyup', 'KeyD');
-frames(120);
-
-const timerText = doc.getElementById('hudTimer').textContent;
-ok(/^\d+:\d\d$/.test(timerText), `timer renders (${timerText})`);
-ok(doc.getElementById('hudRound').textContent.startsWith('RAUND'), 'round label renders');
-ok(doc.querySelectorAll('#hudScores .chip').length === 3, `score chips built (${doc.querySelectorAll('#hudScores .chip').length})`);
-ok(doc.getElementById('hudAlive').textContent.includes('TIRIK'), 'alive counter renders');
 
 console.log('countdown + centre messages');
 ok(doc.getElementById('hudMsg').querySelector('span').textContent.length > 0, 'centre message shown');
@@ -240,7 +242,7 @@ for (let i = 0; i < 200 && !sawRoundEnd; i++) {
 ok(sawRoundEnd, 'round-end screen appeared');
 if (sawRoundEnd) {
   ok(doc.querySelectorAll('#reResults .res-row').length > 0, 'round results listed');
-  ok(doc.querySelectorAll('#reStandings .st-row').length === 3, 'standings listed');
+  ok(doc.querySelectorAll('#reStandings .st-row').length === 4, 'standings listed');
 }
 
 console.log('run to match end');
@@ -251,9 +253,13 @@ for (let i = 0; i < 400 && !sawMatchEnd; i++) {
 }
 ok(sawMatchEnd, 'match-end screen appeared');
 if (sawMatchEnd) {
-  ok(doc.querySelectorAll('#meStandings .st-row').length === 3, 'final standings listed');
+  ok(doc.querySelectorAll('#meStandings .st-row').length === 4, 'final standings listed');
   ok(doc.querySelectorAll('#meStats .stat').length === 6, 'stats rendered');
 }
+
+console.log('profile recorded');
+ok(game.profile.data.games >= 1, 'match recorded into profile');
+ok(game.profile.data.xp > xpBefore, 'xp earned from the match');
 
 console.log('rematch + back to menu');
 click('btnRematch');

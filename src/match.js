@@ -29,6 +29,7 @@ export class Match {
         maxRounds: MATCH.maxRounds,
         roundTime: ARENA.roundTime,
         humanNames: ['Siz'],
+        humanColors: null,
       },
       opts
     );
@@ -58,10 +59,11 @@ export class Match {
     const total = this.opts.humans + this.opts.bots;
     let nameIdx = 0;
     for (let i = 0; i < this.opts.humans; i++) {
+      const cols = this.opts.humanColors;
       this.players.push(
         createPlayer({
           name: this.opts.humanNames[i] ?? (i === 0 ? 'Siz' : `Oyinchi ${i + 1}`),
-          color: PALETTE[i % PALETTE.length],
+          color: cols && cols[i] ? cols[i] : PALETTE[i % PALETTE.length],
           isBot: false,
           isLocal: true,
           controls: i,

@@ -6,8 +6,6 @@ halqasi borgan sari torayadi. Vazifa oddiy: **oxirgi bo'lib qolmang — oxirgi b
 Hech qanday build, hech qanday kutubxona — faqat vanilla JavaScript (ES modullari), Canvas 2D va
 WebAudio. Barcha grafika va ovoz kod ichida sintez qilinadi.
 
-![o'yin](tests/shots/06-closeup.png)
-
 ## Ishga tushirish
 
 ```bash
@@ -46,6 +44,23 @@ Brauzerda `index.html` ni oching. Telefonda ham ishlaydi (chap barmoq — joyist
 - **✦ Arvoh** — 5 s yorilgan va qulayotgan plitalarda yura olasiz.
 - **⬢ Titan** — 6 s urilishda raqibni ikki barobar uzoqqa otadi, o'zingiz og'ir.
 
+## Lobbi va meta-qatlam
+
+Menyu referens-uslubda qurilgan: to'q-ko'k fon, statistika "pill"lari, rank nishoni, mavsum
+baneri, yashil/ko'k katta tugmalar va rangli karta-to'r.
+
+- **Profil** (`localStorage`): XP, RP, rank (Bronza → Afsona), daraja, o'yinlar/vaqt statistikasi.
+- **Mavsum**: `Mavsum 1 • SURVIVAL` — tugash sanasi `src/config.js` da; lobbi kunlar sonini ko'rsatadi.
+- **Kunlik**: har kuni +100 XP bonus va 3 ta kunlik topshiriq (omon qolish / urib tushirish / kuch).
+- **Vazifalar**: umrbod achievement'lar, progress-bar va XP mukofoti bilan.
+- **Reyting**: lokal leaderboard (siz + raqiblar ghostlari).
+- **Kollektsiya**: daraja ochiladigan arena mavzulari (plitalar rangi o'zgaradi).
+- **Skinlar**: daraja ochiladigan o'yinchi ranglari.
+- **Til**: pastdagi `UZ` pilli orqali UZ ⇄ EN (butun lobbi, HUD va natijalar tarjima qilinadi).
+
+Har bir matchdan keyin XP/RP hisoblanadi: g'alaba +120 XP, raund g'alabasi +40, ochko va urib
+tushirishlar ustiga. Daraja oshganda yangi mavzu/skinlar ochiladi va toast chiqadi.
+
 ## Boshqaruv
 
 | Harakat | 1-o'yinchi | 2-o'yinchi |
@@ -76,7 +91,8 @@ src/
   render.js   — Canvas 2D: 2.5D plitalar, zarrachalar, ekran silkinishi, kamera
   audio.js    — WebAudio sintezatori (SFX + ambient drone)
   input.js    — klaviatura + sensor joyistik
-  ui.js       — DOM: menyu, HUD, natija ekranlari
+  profile.js  — localStorage profil: XP/RP, rank, kunlik topshiriqlar, achievement'lar
+  ui.js       — DOM: ko'p ekranli lobbi (i18n UZ/EN), HUD, natija ekranlari
   main.js     — boot, o'yin sikli (fixed timestep), hodisalar marshruti
 tools/
   serve.mjs   — bog'liqliksiz statik server

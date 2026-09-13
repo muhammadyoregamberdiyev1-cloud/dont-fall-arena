@@ -217,3 +217,108 @@ export const BOT_NAMES = [
   'Muzlak',
   'Alpomish',
 ];
+
+/* ==========================================================================
+   Meta layer: season, ranks, themes, skins, missions, achievements
+   ========================================================================== */
+
+export const SEASON = {
+  number: 1,
+  name: 'SURVIVAL',
+  end: '2026-10-01T00:00:00Z',
+};
+
+/** RP thresholds; index 0 = Bronze III. */
+export const RANKS = [
+  { rp: 0, name: 'BRONZE III', icon: '🥉' },
+  { rp: 100, name: 'BRONZE II', icon: '🥉' },
+  { rp: 250, name: 'BRONZE I', icon: '🥉' },
+  { rp: 450, name: 'KUMUSH III', icon: '🥈' },
+  { rp: 700, name: 'KUMUSH II', icon: '🥈' },
+  { rp: 1000, name: 'KUMUSH I', icon: '🥈' },
+  { rp: 1400, name: 'OLTIN III', icon: '🥇' },
+  { rp: 1900, name: 'OLTIN II', icon: '🥇' },
+  { rp: 2500, name: 'OLTIN I', icon: '🥇' },
+  { rp: 3200, name: 'PLATINA', icon: '💎' },
+  { rp: 4200, name: 'AFSONA', icon: '👑' },
+];
+
+/** Arena palettes (Kollektsiya). Unlocked by player level. */
+export const THEMES = [
+  {
+    key: 'classic',
+    level: 1,
+    name: 'Klassik',
+    top: '#39d98a',
+    topAlt: '#25b873',
+    side: '#12593a',
+    edge: '#8dffc9',
+  },
+  {
+    key: 'glacier',
+    level: 2,
+    name: 'Muzlik',
+    top: '#63c9f0',
+    topAlt: '#3fa8d8',
+    side: '#175a78',
+    edge: '#d8f6ff',
+  },
+  {
+    key: 'sunset',
+    level: 3,
+    name: 'Quyosh',
+    top: '#ff9d5c',
+    topAlt: '#f0763c',
+    side: '#7a3413',
+    edge: '#ffd9ae',
+  },
+  {
+    key: 'neon',
+    level: 4,
+    name: 'Neon',
+    top: '#b06bff',
+    topAlt: '#8b46e0',
+    side: '#3c1a70',
+    edge: '#e6ccff',
+  },
+  {
+    key: 'gold',
+    level: 5,
+    name: 'Oltin',
+    top: '#ffd23f',
+    topAlt: '#e0ac1e',
+    side: '#6d5205',
+    edge: '#fff3c4',
+  },
+];
+
+/** Player colours (Skinlar). Unlocked by player level. */
+export const SKINS = [
+  { key: 'rose', level: 1, name: 'Atirgul', color: '#ff5d73' },
+  { key: 'cyan', level: 1, name: 'Muzko\'k', color: '#4dd0ff' },
+  { key: 'sun', level: 1, name: 'Quyosh', color: '#ffd23f' },
+  { key: 'violet', level: 2, name: 'Binafsha', color: '#b47cff' },
+  { key: 'mint', level: 2, name: 'Yalpiz', color: '#5dffa8' },
+  { key: 'ember', level: 3, name: "Cho'g'", color: '#ff9f45' },
+  { key: 'candy', level: 3, name: 'Konfet', color: '#ff6fe0' },
+  { key: 'lime', level: 4, name: 'Laym', color: '#e8ff5d' },
+];
+
+/** Daily missions; progress lives in profile.daily. */
+export const MISSIONS = [
+  { key: 'survive', target: 3, xp: 60, icon: '🛟' },
+  { key: 'shove', target: 2, xp: 80, icon: '💥' },
+  { key: 'power', target: 3, xp: 40, icon: '✨' },
+];
+
+/** Lifetime achievements (Vazifalar). */
+export const ACHIEVEMENTS = [
+  { key: 'first', target: 1, xp: 50, icon: '🎬', stat: 'games' },
+  { key: 'survivor', target: 10, xp: 100, icon: '🛟', stat: 'survived' },
+  { key: 'bull', target: 25, xp: 150, icon: '💥', stat: 'eliminations' },
+  { key: 'collector', target: 20, xp: 100, icon: '✨', stat: 'powerups' },
+  { key: 'champ', target: 5, xp: 250, icon: '🏆', stat: 'wins' },
+  { key: 'legend', target: 1, xp: 400, icon: '👑', stat: 'nightmareWins' },
+];
+
+export const XP_PER_LEVEL = 300;

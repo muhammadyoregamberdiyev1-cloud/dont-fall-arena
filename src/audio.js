@@ -8,6 +8,7 @@ export class Sfx {
     this.ctx = null;
     this.master = null;
     this.enabled = true;
+    this.musicOn = true;
     this.volume = 0.7;
     this.drone = null;
   }
@@ -66,9 +67,20 @@ export class Sfx {
     this.drone = { g, filt, o1, o2 };
   }
 
+  setMusicEnabled(on) {
+    this.musicOn = on;
+    if (this.drone && this.ctx) {
+      this.drone.g.gain.setTargetAtTime(on ? 0.04 : 0, this.now(), 0.25);
+    }
+  }
+
   setTension(t) {
     if (!this.drone || !this.ctx) return;
     const now = this.now();
+    if (!this.musicOn) {
+      this.drone.g.gain.setTargetAtTime(0, now, 0.25);
+      return;
+    }
     this.drone.g.gain.setTargetAtTime(0.035 + t * 0.075, now, 0.4);
     this.drone.filt.frequency.setTargetAtTime(320 + t * 900, now, 0.5);
     this.drone.o1.frequency.setTargetAtTime(55 + t * 14, now, 0.6);

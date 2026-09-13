@@ -8,39 +8,11 @@ import { Renderer } from './render.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { UI } from './ui.js';
-import { ARENA, MATCH, POWERUPS, DIFFICULTY } from './config.js';
+import { Profile } from './profile.js';
+import { ARENA, POWERUPS, THEMES, SKINS } from './config.js';
 
-const STORE_KEY = 'dont-fall-arena:settings:v1';
 const STEP = 1 / 60;
 const MAX_STEPS = 5;
-
-const DEFAULT_SETTINGS = {
-  name: 'Siz',
-  bots: 3,
-  difficulty: 'normal',
-  arenaRadius: ARENA.radius,
-  roundsToWin: MATCH.roundsToWin,
-  twoPlayers: false,
-  sound: true,
-};
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
-
-function saveSettings(s) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(s));
-  } catch {
-    /* private mode — fine */
-  }
-}
 
 class Game {
   constructor() {
@@ -48,8 +20,8 @@ class Game {
     this.renderer = new Renderer(this.canvas);
     this.sfx = new Sfx();
     this.input = new Input(this.canvas);
-    this.ui = new UI();
-    this.settings = loadSettings();
+    this.profile = new Profile();
+    this.ui = new UI(this.profile);
 
     this.match = null;
     this.attract = null;
@@ -58,16 +30,17 @@ class Game {
     this.last = performance.now();
     this.sfxThrottle = {};
 
-    this.ui.bindMenu(this.settings);
-    this.ui.setSettings(this.settings);
-    this.ui.setSoundIcon(this.settings.sound);
-    this.sfx.setEnabled(this.settings.sound);
+    document.documentElement.lang = this.profile.data.lang;
+    this.sfx.setEnabled(this.profile.data.sound);
+    this.sfx.setMusicEnabled(this.profile.data.music);
+    this.ui.setSoundIcon(this.profile.data.sound);
+    this.renderer.setTheme(this.profile.theme());
 
     this.ui.on('start', () => this.startMatch());
-    this.ui.on('rematch', () => this.startMatch(true));
+    this.ui.on('rematch', () => this.startMatch());
     this.ui.on('menu', () => this.toMenu());
     this.ui.on('resume', () => this.resume());
-    this.ui.on('restart', () => this.startMatch(true));
+    this.ui.on('restart', () => this.startMatch());
     this.ui.on('pause', () => this.togglePause());
     this.ui.on('mute', () => this.toggleSound());
     this.ui.on('click', () => {
@@ -78,7 +51,16 @@ class Game {
       this.sfx.unlock();
       this.sfx.setEnabled(v);
       this.ui.setSoundIcon(v);
-      saveSettings(this.settings);
+    });
+    this.ui.on('music', (v) => this.sfx.setMusicEnabled(v));
+    this.ui.on('theme', (th) => this.renderer.setTheme(th));
+    this.ui.on('xp', (g) => this.onXp(g));
+    this.ui.on('reset', () => {
+      this.renderer.setTheme(this.profile.theme());
+      this.sfx.setEnabled(this.profile.data.sound);
+      this.sfx.setMusicEnabled(this.profile.data.music);
+      this.ui.setSoundIcon(this.profile.data.sound);
+      this.ui.goto('home');
     });
 
     this.input.onAction = (name) => this.handleAction(name);
@@ -91,9 +73,7 @@ class Game {
     });
     window.addEventListener('pointerdown', () => this.sfx.unlock(), { once: true });
 
-    // attract mode: bots play behind the menu
     this.startAttract();
-
     this.ui.show('menu');
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
@@ -117,39 +97,38 @@ class Game {
     this.state = 'menu';
     this.match = null;
     if (!this.attract || this.attract.state === ROUND_STATE.MATCH_END) this.startAttract();
+    this.ui.goto('home');
     this.ui.show('menu');
     this.sfx.setTension(0);
   }
 
-  startMatch(keepSettings = false) {
+  startMatch() {
     this.sfx.unlock();
     this.sfx.play('start');
-    if (!keepSettings) {
-      this.settings.name = document.getElementById('optName').value.trim().slice(0, 12) || 'Siz';
-      saveSettings(this.settings);
-    }
 
-    const humans = this.settings.twoPlayers ? 2 : 1;
+    const o = this.ui.opts;
+    const humans = o.two ? 2 : 1;
+    const bots = o.botFill ? Math.max(0, o.seats - humans) : 0;
+    const skin = this.profile.skinColor();
+
     this.match = new Match({
       seed: Math.floor(Math.random() * 1e9),
       humans,
-      bots: this.settings.bots,
-      difficulty: this.settings.difficulty,
-      arenaRadius: this.settings.arenaRadius,
-      roundsToWin: this.settings.roundsToWin,
-      maxRounds: Math.max(this.settings.roundsToWin * 2 + 1, 5),
+      bots,
+      difficulty: o.difficulty,
+      arenaRadius: o.seats <= 2 ? 5 : o.seats <= 4 ? 6 : 7,
+      roundsToWin: 3,
+      maxRounds: 7,
       roundTime: ARENA.roundTime,
-      humanNames: humans > 1 ? [this.settings.name, "2-o'yinchi"] : [this.settings.name],
+      humanNames: humans > 1 ? [this.profile.data.name, this.profile.data.lang === 'uz' ? "2-o'yinchi" : 'Player 2'] : [this.profile.data.name],
+      humanColors: humans > 1 ? [skin, '#4dd0ff'] : [skin],
     });
     this.attract = null;
     this.state = 'playing';
     this.ui.buildChips(this.match.players, this.match.opts.roundsToWin);
     this.ui.clearFeed();
     this.ui.show('hud');
-    this.ui.el.hint.textContent =
-      humans > 1
-        ? '1-o‘yinchi: WASD + SPACE · 2-o‘yinchi: ↑↓←→ + ENTER · ESC — pauza'
-        : "WASD / ↑↓←→ — yurish · SPACE — sakrash · ESC — pauza";
+    this.ui.el.hint.textContent = humans > 1 ? this.ui.t('hint2') : this.ui.t('hint1');
     document.body.classList.toggle('touch', this.input.isTouchDevice);
   }
 
@@ -174,12 +153,26 @@ class Game {
   }
 
   toggleSound() {
-    this.settings.sound = !this.settings.sound;
+    const p = this.profile;
+    p.data.sound = !p.data.sound;
+    p.save();
     this.sfx.unlock();
-    this.sfx.setEnabled(this.settings.sound);
-    this.ui.setSoundIcon(this.settings.sound);
-    if (this.ui.setSound) this.ui.setSound(this.settings.sound);
-    saveSettings(this.settings);
+    this.sfx.setEnabled(p.data.sound);
+    this.ui.setSoundIcon(p.data.sound);
+    if (this.ui.current === 'menu') this.ui.renderMenu();
+  }
+
+  /** XP gained from the lobby (bonus / missions / achievements). */
+  onXp(g) {
+    this.sfx.play('powerup');
+    if (g && g.after > g.before) this.announceLevel(g.before, g.after);
+  }
+
+  announceLevel(before, after) {
+    this.ui.toast(this.ui.t('tLevelUp', { n: after }), '#ffe6a3', 2400);
+    this.sfx.play('matchEnd');
+    for (const th of THEMES) if (th.level > before && th.level <= after) this.ui.toast(this.ui.t('tUnlock', { what: th.name }), th.top, 2600);
+    for (const sk of SKINS) if (sk.level > before && sk.level <= after) this.ui.toast(this.ui.t('tUnlock', { what: sk.name }), sk.color, 2600);
   }
 
   handleAction(name) {
@@ -191,14 +184,11 @@ class Game {
         this.toggleSound();
         break;
       case 'restart':
-        if (this.state === 'playing' || this.state === 'paused') this.startMatch(true);
+        if (this.state === 'playing' || this.state === 'paused') this.startMatch();
         break;
       case 'confirm':
-        if (this.state === 'menu') this.startMatch();
-        else if (this.state === 'over') this.startMatch(true);
-        break;
-      case 'help':
-        if (this.state === 'playing') this.pause();
+        if (this.state === 'menu' && this.ui.screen === 'setup') this.startMatch();
+        else if (this.state === 'over') this.startMatch();
         break;
       default:
         break;
@@ -212,6 +202,7 @@ class Game {
     const rawDt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     if (rawDt <= 0) return;
+    this.ui.frameMs = this.ui.frameMs * 0.9 + rawDt * 1000 * 0.1;
 
     if (this.state === 'menu' && this.attract) {
       this.acc += rawDt;
@@ -231,8 +222,6 @@ class Game {
     if (!this.match) return;
 
     const inputs = this.input.sample(rawDt);
-    // The match keeps ticking through round-end / match-end interludes; it
-    // gates its own simulation. Only a real pause freezes it.
     const live = this.state !== 'paused';
 
     if (live) {
@@ -251,12 +240,8 @@ class Game {
         this.handleEvents(this.match.drainEvents());
       }
       if (steps >= MAX_STEPS) this.acc = 0;
-    } else {
-      // paused / result screens: keep visuals alive, freeze the sim
-      inputs.forEach((v) => (v.dash = false));
     }
 
-    // tension for the ambient drone
     const ring = this.match.arena.maxRing / Math.max(1, this.match.opts.arenaRadius);
     this.sfx.setTension(live ? Math.pow(1 - ring, 1.4) : 0.15);
 
@@ -301,8 +286,13 @@ class Game {
     return p && !p.isBot;
   }
 
+  esc(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
   handleEvents(events) {
     const match = this.match;
+    const t = (k, p) => this.ui.t(k, p);
     this.renderer.consume(events, match.arena);
 
     for (const e of events) {
@@ -312,15 +302,15 @@ class Game {
           this.ui.show('hud');
           this.ui.buildChips(match.players, match.opts.roundsToWin);
           this.ui.clearFeed();
-          this.ui.setMsg(`RAUND ${e.round}`);
-          this.ui.feed(`Raund ${e.round} — ${match.players.length} o'yinchi`);
+          this.ui.setMsg(`${t('round')} ${e.round}`);
+          this.ui.feed(t('feedRound', { n: e.round, k: match.players.length }));
           break;
         case 'count':
           this.ui.setMsg(String(e.n));
           this.sfx.play('count');
           break;
         case 'go':
-          this.ui.setMsg('BOSHLANDI!');
+          this.ui.setMsg('GO!');
           this.sfx.play('go');
           break;
         case 'crack':
@@ -331,12 +321,12 @@ class Game {
           break;
         case 'quake':
           this.sfx.play('quake');
-          this.ui.toast('ZILZILA!', '#ff9f45', 1200);
+          this.ui.toast(t('tQuake'), '#ff9f45', 1200);
           break;
         case 'collapse':
           this.sfx.play('collapse');
-          this.ui.setMsg('HALQA QULADI');
-          this.ui.feed(`<b>Halqa ${e.ring}</b> qulab tushdi`);
+          this.ui.setMsg(t('tCollapse'));
+          this.ui.feed(t('feedCollapse', { n: e.ring }));
           break;
         case 'dash':
           if (this.isHuman(e.player)) this.sfx.play('dash');
@@ -350,7 +340,7 @@ class Game {
         case 'doomed':
           if (this.isHuman(e.player)) {
             this.sfx.play('doomed');
-            this.ui.toast('QULAYAPSIZ! SAKRANG!', '#ff5d73', 900);
+            this.ui.toast(t('tFalling'), '#ff5d73', 900);
           }
           break;
         case 'scramble':
@@ -359,32 +349,24 @@ class Game {
         case 'fell': {
           this.sfx.play('fell');
           const human = this.isHuman(e.player);
-          this.ui.feed(
-            `<b style="color:${e.player.color}">${esc(e.player.name)}</b> ${human ? '— siz quladingiz' : 'qulab tushdi'}`
-          );
-          if (human) this.ui.toast('SIZ QULADINGIZ', '#ff5d73', 2200);
+          this.ui.feed(human ? t('feedYouFell', { name: this.esc(e.player.name), c: e.player.color }) : t('feedFell', { name: this.esc(e.player.name), c: e.player.color }));
+          if (human) this.ui.toast(t('tYouFell'), '#ff5d73', 2200);
           break;
         }
         case 'shovedOff': {
           const k = e.killer;
           const v = e.victim;
           this.sfx.play('shovedOff');
-          this.ui.feed(
-            `<b style="color:${k.color}">${esc(k.name)}</b> → <b style="color:${v.color}">${esc(v.name)}</b> urib tushirdi`
-          );
-          if (this.isHuman(k)) this.ui.toast("URIB TUSHIRDINGIZ!", '#ffd23f', 1400);
+          this.ui.feed(t('feedShove', { a: this.esc(k.name), b: this.esc(v.name), ca: k.color, cb: v.color }));
+          if (this.isHuman(k)) this.ui.toast(t('tShoved'), '#ffd23f', 1400);
           break;
         }
         case 'powerup': {
           this.sfx.play('powerup');
           const def = POWERUPS[e.type] || e.def;
-          if (this.isHuman(e.player)) {
-            this.ui.toast(`${def.icon} ${def.label.toUpperCase()}!`, def.color, 1400);
-          } else {
-            this.ui.feed(
-              `<b style="color:${e.player.color}">${esc(e.player.name)}</b> ${def.label} oldi`
-            );
-          }
+          const label = this.ui.pwName(e.type);
+          if (this.isHuman(e.player)) this.ui.toast(`${def.icon} ${label.toUpperCase()}!`, def.color, 1400);
+          else this.ui.feed(t('feedPower', { name: this.esc(e.player.name), c: e.player.color, p: label }));
           break;
         }
         case 'powerupSpawn':
@@ -403,8 +385,7 @@ class Game {
         }
         case 'matchEnd': {
           this.sfx.play('matchEnd');
-          this.ui.showMatchEnd(match);
-          this.state = 'over';
+          this.finishMatch(match);
           break;
         }
         default:
@@ -412,18 +393,35 @@ class Game {
       }
     }
   }
-}
 
-function esc(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  /** Persist the match into the meta layer and show the results. */
+  finishMatch(match) {
+    const humans = match.players.filter((p) => !p.isBot);
+    const sum = (f) => humans.reduce((a, p) => a + f(p), 0);
+    const summary = {
+      won: !!match.matchWinner && humans.some((h) => h.id === match.matchWinner.id),
+      roundWins: sum((p) => p.wins),
+      points: sum((p) => p.points),
+      eliminations: sum((p) => p.stats.eliminations),
+      powerups: sum((p) => p.stats.powerups),
+      falls: sum((p) => p.stats.falls),
+      survived: sum((p) => p.stats.survived),
+      bestRoundTime: humans.reduce((a, p) => Math.max(a, p.stats.bestTime), 0),
+      time: Math.round(match.time),
+      difficulty: match.opts.difficulty,
+    };
+    const gains = this.profile.recordMatch(summary);
+    this.state = 'over';
+    this.ui.showMatchEnd(match, gains);
+    if (gains.after > gains.before) this.announceLevel(gains.before, gains.after);
+  }
 }
 
 /* boot once the DOM is ready */
 function boot() {
   const game = new Game();
-  // handy hook for debugging in the console (and for the headless harness)
   try {
-    window.__game = game;
+    window.__game = game; // debug / test hook
   } catch {
     /* ignore */
   }
@@ -436,4 +434,4 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-export { Game, DIFFICULTY, ROUND_STATE };
+export { Game, ROUND_STATE };
