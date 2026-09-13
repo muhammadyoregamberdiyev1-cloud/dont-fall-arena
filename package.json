@@ -1,19 +1,21 @@
 {
   "name": "dont-fall-arena",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Don't Fall Arena — olti burchakli plitalar qulab tushadigan arenada oxirgi bo'lib qoling.",
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
     "dev": "node tools/serve.mjs",
-    "test": "node tests/sim.mjs"
-  },
-  "engines": {
-    "node": ">=18"
+    "test": "node --import ./tools/qloader.mjs tests/sim.mjs",
+    "test:dom": "node --import ./tools/qloader.mjs tests/dom.mjs",
+    "test:shot": "node --import ./tools/qloader.mjs tests/shot.mjs"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.9",
     "jsdom": "^30.0.1"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

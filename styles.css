@@ -63,6 +63,24 @@ canvas#game {
   display: none !important;
 }
 
+.boot-error {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99;
+  max-width: min(92vw, 720px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(120, 20, 30, 0.95);
+  border: 1px solid rgba(255, 120, 130, 0.6);
+  color: #ffd7dd;
+  font: 700 12.5px var(--mono);
+  line-height: 1.5;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  white-space: pre-wrap;
+}
+
 button {
   font-family: var(--font);
   color: inherit;

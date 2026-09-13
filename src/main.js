@@ -3,13 +3,13 @@
  * (render.js, audio.js, ui.js) and owns the app-level state machine.
  */
 
-import { Match, ROUND_STATE } from './match.js';
-import { Renderer } from './render.js';
-import { Sfx } from './audio.js';
-import { Input } from './input.js';
-import { UI } from './ui.js';
-import { Profile } from './profile.js';
-import { ARENA, POWERUPS, THEMES, SKINS } from './config.js';
+import { Match, ROUND_STATE } from './match.js?v=20260913';
+import { Renderer } from './render.js?v=20260913';
+import { Sfx } from './audio.js?v=20260913';
+import { Input } from './input.js?v=20260913';
+import { UI } from './ui.js?v=20260913';
+import { Profile } from './profile.js?v=20260913';
+import { ARENA, POWERUPS, THEMES, SKINS } from './config.js?v=20260913';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 5;
@@ -419,11 +419,18 @@ class Game {
 
 /* boot once the DOM is ready */
 function boot() {
-  const game = new Game();
+  let game = null;
   try {
+    game = new Game();
     window.__game = game; // debug / test hook
-  } catch {
-    /* ignore */
+  } catch (err) {
+    // Never leave the user with a blank page: surface the failure.
+    try {
+      (window.__bootErrors ||= []).push('boot: ' + (err && err.message ? err.message : err));
+      window.__showBootError && window.__showBootError();
+    } catch {
+      console.error(err);
+    }
   }
   return game;
 }

@@ -3,9 +3,9 @@
  * Pure simulation — rendering reads from it, it never touches the DOM.
  */
 
-import { TILE, MAT, MATERIALS, ARENA } from './config.js';
-import { axialToPixel, pixelToAxial, hexDistance, hexSpiral, hexRing } from './hex.js';
-import { clamp } from './rng.js';
+import { TILE, MAT, MATERIALS, ARENA } from './config.js?v=20260913';
+import { axialToPixel, pixelToAxial, hexDistance, hexSpiral, hexRing } from './hex.js?v=20260913';
+import { clamp } from './rng.js?v=20260913';
 
 const key = (q, r) => q + ',' + r;
 

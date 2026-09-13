@@ -3,9 +3,9 @@
  * reach, then steers toward the best one and dashes over gaps when it must.
  */
 
-import { TILE } from './config.js';
-import { hexDistance, hexSpiral } from './hex.js';
-import { clamp } from './rng.js';
+import { TILE } from './config.js?v=20260913';
+import { hexDistance, hexSpiral } from './hex.js?v=20260913';
+import { clamp } from './rng.js?v=20260913';
 
 const CANDIDATE_CACHE = new Map();
 

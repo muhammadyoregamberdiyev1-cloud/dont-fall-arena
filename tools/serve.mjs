@@ -5,6 +5,7 @@
 
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,9 +50,16 @@ const server = http.createServer(async (req, res) => {
     const target = info.isDirectory() ? join(filePath, 'index.html') : filePath;
     const data = await readFile(target);
     const ext = extname(target).toLowerCase();
+    const etag = '"' + createHash('sha1').update(data).digest('hex').slice(0, 16) + '"';
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { etag, 'cache-control': 'no-store, must-revalidate' });
+      res.end();
+      return;
+    }
     res.writeHead(200, {
       'content-type': MIME[ext] || 'application/octet-stream',
-      'cache-control': 'no-cache',
+      'cache-control': 'no-store, must-revalidate',
+      etag,
       'content-length': data.length,
     });
     res.end(req.method === 'HEAD' ? undefined : data);

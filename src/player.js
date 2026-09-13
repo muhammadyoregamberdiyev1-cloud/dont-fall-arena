@@ -4,9 +4,9 @@
  * stops supporting them they get a short scramble window, then they fall.
  */
 
-import { PLAYER, MATERIALS, TILE, POWERUPS, DIFFICULTY } from './config.js';
-import { clamp, approach } from './rng.js';
-import { hexDistance } from './hex.js';
+import { PLAYER, MATERIALS, TILE, POWERUPS, DIFFICULTY } from './config.js?v=20260913';
+import { clamp, approach } from './rng.js?v=20260913';
+import { hexDistance } from './hex.js?v=20260913';
 
 let nextId = 1;
 

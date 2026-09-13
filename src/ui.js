@@ -3,7 +3,7 @@
  * All copy lives in the I18N table so the whole lobby flips UZ ⇄ EN.
  */
 
-import { POWERUPS, PLAYER, MATCH, SEASON, MISSIONS, ACHIEVEMENTS, RANKS, THEMES, SKINS } from './config.js';
+import { POWERUPS, PLAYER, MATCH, SEASON, MISSIONS, ACHIEVEMENTS, RANKS, THEMES, SKINS } from './config.js?v=20260913';
 
 const $ = (id) => document.getElementById(id);
 
@@ -330,6 +330,11 @@ export class UI {
       touchStick: $('touchStick'),
       touchKnob: $('touchKnob'),
     };
+
+    const missing = Object.entries(this.el).filter(([, v]) => !v).map(([k]) => k);
+    if (missing.length) {
+      throw new Error('index.html eskirgan (element topilmadi): ' + missing.join(', '));
+    }
 
     this.screen = 'home'; // lobby sub-screen
     this.current = 'menu'; // app-level screen

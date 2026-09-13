@@ -3,9 +3,9 @@
  * particle system). Everything is drawn from scratch — no image assets.
  */
 
-import { TILE, MAT, MATERIALS, POWERUPS, PLAYER, ARENA } from './config.js';
-import { hexCorners, hexRing } from './hex.js';
-import { clamp, lerp, easeOutCubic, easeInCubic, smoothstep } from './rng.js';
+import { TILE, MAT, MATERIALS, POWERUPS, PLAYER, ARENA } from './config.js?v=20260913';
+import { hexCorners, hexRing } from './hex.js?v=20260913';
+import { clamp, lerp, easeOutCubic, easeInCubic, smoothstep } from './rng.js?v=20260913';
 
 const TAU = Math.PI * 2;
 

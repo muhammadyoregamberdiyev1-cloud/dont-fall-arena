@@ -3,7 +3,7 @@
  * unlocks. The meta layer the menu shows off.
  */
 
-import { RANKS, MISSIONS, ACHIEVEMENTS, XP_PER_LEVEL, SEASON, THEMES, SKINS } from './config.js';
+import { RANKS, MISSIONS, ACHIEVEMENTS, XP_PER_LEVEL, SEASON, THEMES, SKINS } from './config.js?v=20260913';
 
 const KEY = 'dont-fall-arena:profile:v2';
 

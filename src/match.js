@@ -3,11 +3,11 @@
  * The renderer and audio only ever *read* this object or consume its event log.
  */
 
-import { ARENA, MATCH, PLAYER, POWERUPS, PALETTE, BOT_NAMES, TILE } from './config.js';
-import { makeRng, clamp } from './rng.js';
-import { Arena } from './arena.js';
-import { createPlayer, resetPlayerForRound, stepPlayer, resolveCollisions, grantPowerup } from './player.js';
-import { botInput } from './bots.js';
+import { ARENA, MATCH, PLAYER, POWERUPS, PALETTE, BOT_NAMES, TILE } from './config.js?v=20260913';
+import { makeRng, clamp } from './rng.js?v=20260913';
+import { Arena } from './arena.js?v=20260913';
+import { createPlayer, resetPlayerForRound, stepPlayer, resolveCollisions, grantPowerup } from './player.js?v=20260913';
+import { botInput } from './bots.js?v=20260913';
 
 export const ROUND_STATE = {
   COUNTDOWN: 'countdown',
